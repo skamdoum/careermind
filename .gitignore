@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.env
+.env.local
+
+careermind-web/node_modules/
+careermind-web/.next/
+careermind-web/.env
+careermind-web/.env.local

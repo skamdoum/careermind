@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export default function Insights() {
+export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function Insights() {
 
   if (!insights) {
     return (
-      <section className="border rounded p-5 bg-white shadow-sm mb-6">
+      <section className={`border rounded p-5 bg-white shadow-sm mb-6 ${className}`}>
         <h2 className="font-semibold text-lg mb-3">Career Pattern</h2>
         <div className="text-sm text-gray-500">Loading insights...</div>
       </section>

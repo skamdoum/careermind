@@ -21,43 +21,46 @@ export default function AnalyzePage() {
   const [comparing, setComparing] = useState(false);
 
   useEffect(() => {
-    async function loadUserAndResume() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+  async function loadUserAndResume() {
+    // 👉 RESET UI STATE FIRST
+    setResult(null);
+    setStatus("Ready to analyze your profile");
 
-      console.log("Loaded user:", user, userError);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-      if (!user) {
-        setUserId(null);
+    console.log("Loaded user:", user, userError);
+
+    if (!user) {
+      setUserId(null);
+      return;
+    }
+
+    setUserId(user.id);
+
+    const res = await fetch("/api/resumes/latest");
+    const data = await res.json();
+
+    if (!res.ok) {
+      if (data.code === "LIMIT_REACHED") {
+        setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
         return;
       }
 
-      setUserId(user.id);
-
-      const res = await fetch("/api/resumes/latest");
-      const data = await res.json();
-
-      if (!res.ok) {
-  if (data.code === "LIMIT_REACHED") {
-    setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
-    return;
-  }
-
-  setStatus(data.error || "Analyze failed");
-  return;
-}
-
-      console.log("Latest resume API response:", data);
-
-      if (res.ok) {
-        setLatestResume(data.resume || null);
-      }
+      setStatus(data.error || "Analyze failed");
+      return;
     }
 
-    loadUserAndResume();
-  }, []);
+    // 👉 SET LATEST RESUME IF EXISTS
+    if (data?.resume) {
+      setLatestResume(data.resume);
+    }
+  }
+
+  loadUserAndResume();
+}, []);
 
   async function handleUploadResume() {
     if (!userId || !selectedFile) {

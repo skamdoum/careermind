@@ -3,10 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 
 export default function AppNavbar() {
   const pathname = usePathname();
   const supabase = createClient();
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  useEffect(() => {
+    async function loadUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user?.email) {
+        setUserEmail(user.email);
+      } else if (user?.id) {
+        setUserEmail(`${user.id.slice(0, 8)}...`);
+      }
+    }
+
+    loadUser();
+  }, [supabase]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -38,12 +56,20 @@ export default function AppNavbar() {
         </div>
       </div>
 
-      <button
-        onClick={handleSignOut}
-        className="px-3 py-2 rounded text-sm font-medium border hover:bg-gray-50"
-      >
-        Sign out
-      </button>
+      <div className="flex items-center gap-3">
+        {userEmail && (
+        <div className="text-sm text-gray-600 hidden sm:block">
+        Signed in as <span className="font-medium text-black">{userEmail}</span>
+        </div>
+        )}
+
+        <button
+          onClick={handleSignOut}
+          className="px-3 py-2 rounded text-sm font-medium border hover:bg-gray-50"
+        >
+          Sign out
+        </button>
+      </div>
     </nav>
   );
 }

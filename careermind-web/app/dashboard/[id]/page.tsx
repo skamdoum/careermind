@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import TaskList from "./task-list";
+import AppNavbar from "@/app/components/app-navbar";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,8 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
 
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
+      <AppNavbar />
+      
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Analysis</h1>
         <p className="text-sm text-gray-500">

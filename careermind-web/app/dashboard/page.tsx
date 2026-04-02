@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import SignOutButton from "@/app/components/sign-out-button";
 import Insights from "./insights";
+import AppNavbar from "@/app/components/app-navbar";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -33,11 +33,13 @@ if (error) {
 }
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-4 text-black">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Your Analyses</h1>
-        <SignOutButton />
-      </div>
+    
+   <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
+  <AppNavbar />
+
+  <div className="flex items-center justify-between">
+    <h1 className="text-2xl font-bold">Your Analyses</h1>
+  </div>
 
 <Insights className="mb-6" />
 

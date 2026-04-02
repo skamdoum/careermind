@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import AppNavbar from "@/app/components/app-navbar";
 
 export default function AnalyzePage() {
   const supabase = createClient();
@@ -232,7 +233,9 @@ function getRecommendation(results: any[]) {
 }
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
-      <div className="space-y-2">
+  <AppNavbar />
+
+  <div className="space-y-2">
         <h1 className="text-3xl font-bold">Analyze Your Fit</h1>
         <p className="text-gray-600 max-w-2xl">
           Upload your resume, paste a target job description, and get a structured

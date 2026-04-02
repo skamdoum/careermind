@@ -32,8 +32,8 @@ export default function LoginPage() {
 
   if (!signInError) {
     await fetch("/api/profile/ensure", { method: "POST" });
-    //window.location.href = "/dashboard";
-    window.location.href = "/analyze";
+    window.location.href = "/dashboard";
+    //window.location.href = "/analyze";
   }
 }
 
@@ -54,8 +54,8 @@ export default function LoginPage() {
   await fetch("/api/profile/ensure", { method: "POST" });
 
   // redirect to dashboard
-  //window.location.href = "/dashboard";
-  window.location.href = "/analyze";
+  window.location.href = "/dashboard";
+  //window.location.href = "/analyze";
 }
 
   return (

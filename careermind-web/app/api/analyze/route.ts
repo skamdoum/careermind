@@ -44,7 +44,8 @@ export async function POST(req: Request) {
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id);
 
-    if ((count || 0) >= 3) {
+    const FREE_ANALYSIS_LIMIT = 50;
+    if ((count || 0) >= FREE_ANALYSIS_LIMIT) {
       return NextResponse.json(
         {
           error: "Free limit reached",

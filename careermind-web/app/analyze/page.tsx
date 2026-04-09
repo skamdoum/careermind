@@ -63,16 +63,18 @@ export default function AnalyzePage() {
   loadUserAndResume();
 }, []);
 
-  async function handleUploadResume() {
-    if (!userId || !selectedFile) {
-      setStatus("Select a file first");
-      return;
-    }
+async function handleUploadResume() {
+  if (!selectedFile) {
+    setStatus("Select a file first");
+    return;
+  }
 
-    setUploading(true);
-    setStatus("Uploading resume...");
+  setUploading(true);
+  setStatus("Preparing resume...");
 
-    try {
+  try {
+    // Logged-in users: upload to Supabase Storage + save metadata
+    if (userId) {
       const fileExt = selectedFile.name.split(".").pop();
       const filePath = `${userId}/${Date.now()}.${fileExt}`;
 
@@ -107,26 +109,67 @@ export default function AnalyzePage() {
 
       setUploadedResume(data.resume);
       setLatestResume(data.resume);
-      setStatus("Resume uploaded successfully");
-    } catch (error: any) {
-      console.error(error);
-      setStatus(error.message || "Upload failed");
-    } finally {
-      setUploading(false);
+      setStatus(userId ? "Resume uploaded successfully" : "Resume ready for analysis");
+    } else {
+      // Guest users: do NOT upload to Supabase Storage
+      // Just keep the selected file locally for analysis
+      setUploadedResume({
+        file_name: selectedFile.name,
+        mime_type: selectedFile.type,
+        guest: true,
+      });
+      setStatus("Resume ready for analysis");
     }
+  } catch (error: any) {
+    console.error(error);
+    setStatus(error.message || "Upload failed");
+  } finally {
+    setUploading(false);
   }
+}
 
 async function handleAnalyze() {
-  if (!userId) {
-    setStatus("You must be logged in");
-    return;
-  }
-
   setLoading(true);
-  setStatus("Analyzing your profile... this may take a few seconds.");
+  setStatus("Analyzing your profile...");
   setResult(null);
 
   try {
+    // Guest mode: send as FormData if file is local only
+    if (!userId && selectedFile) {
+      const formData = new FormData();
+      formData.append("jobDescription", jobDescription);
+      formData.append("targetRole", "PM");
+      formData.append("targetLevel", "Senior");
+      formData.append("resumeFile", selectedFile);
+
+      if (resumeText) {
+        formData.append("resumeText", resumeText);
+      }
+
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.code === "LIMIT_REACHED") {
+          setStatus("You’ve reached the free limit. Upgrade to continue.");
+          return;
+        }
+
+        setStatus(data.error || "Analyze failed");
+        setResult({ error: data.error || "Analyze failed" });
+        return;
+      }
+
+      setStatus("Analysis complete");
+      setResult(data.result);
+      return;
+    }
+
+    // Logged-in flow: existing JSON body
     const res = await fetch("/api/analyze", {
       method: "POST",
       headers: {
@@ -146,7 +189,7 @@ async function handleAnalyze() {
 
     if (!res.ok) {
       if (data.code === "LIMIT_REACHED") {
-        setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
+        setStatus("You’ve reached the free limit. Upgrade to continue.");
         return;
       }
 
@@ -246,9 +289,12 @@ function getRecommendation(results: any[]) {
       <section className="border rounded p-5 bg-white shadow-sm space-y-4">
         <div>
           <h2 className="font-semibold text-lg">Step 1 — Upload Resume</h2>
-          <p className="text-sm text-gray-600">
-            Use your latest uploaded resume or upload a new version.
-          </p>
+        <p className="text-sm text-gray-600 mb-1">
+        Upload your resume to get started.
+        </p>
+        <p className="text-xs text-gray-500 mb-4">
+          Try CareerMind instantly. Log in to save analyses and track progress over time.
+        </p>
         </div>
 
         {latestResume ? (
@@ -265,16 +311,31 @@ function getRecommendation(results: any[]) {
           accept=".pdf,.doc,.docx,.txt"
           onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
         />
+        <div className="text-sm text-gray-500">
+  Selected file: {selectedFile ? selectedFile.name : "none"}
+</div>
 
         <div className="flex gap-2">
-          <button
-            className="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
-            onClick={handleUploadResume}
-            disabled={!selectedFile || uploading}
-          >
-            {uploading ? "Uploading..." : "Upload Resume"}
-          </button>
+<button
+  className="px-5 py-3 rounded bg-black text-white disabled:opacity-50"
+  onClick={handleUploadResume}
+  disabled={uploading || !selectedFile}
+>
+  {uploading
+    ? userId
+      ? "Uploading..."
+      : "Preparing..."
+    : userId
+      ? "Upload Resume"
+      : "Use Resume for Analysis"}
+</button>
         </div>
+
+{!userId && (
+  <div className="text-xs text-gray-500 mt-2">
+    Your resume will not be saved unless you log in.
+  </div>
+)}
 
         {uploadedResume && (
           <div className="text-sm text-green-700">
@@ -403,13 +464,25 @@ function getRecommendation(results: any[]) {
     </p>
   </div>
 
-  <button
-    className="px-5 py-3 rounded bg-black text-white disabled:opacity-50 w-full"
-    onClick={handleAnalyze}
-    disabled={loading || !userId || (!latestResume && !resumeText) || !jobDescription}
-  >
-    {loading ? "Analyzing..." : "Run Analysis"}
-  </button>
+<button
+  className="px-5 py-3 rounded bg-black text-white disabled:opacity-50 w-full"
+  onClick={handleAnalyze}
+  disabled={
+    loading ||
+    (!selectedFile && !latestResume && !resumeText) ||
+    !jobDescription
+  }
+>
+  {loading ? "Analyzing..." : "Run Analysis"}
+</button>
+
+<div className="text-xs text-gray-500">
+  userId: {userId || "guest"} | selectedFile: {selectedFile ? selectedFile.name : "none"} | latestResume: {latestResume ? "yes" : "no"} | resumeText: {resumeText ? "yes" : "no"} | jobDescription: {jobDescription ? "yes" : "no"}
+</div>
+
+  <div className="mt-2 text-xs text-gray-500">
+  No account required to try. Log in to save your results.
+</div>
 
 <div className="mt-3 space-y-3">
   <div className="text-sm text-gray-500">

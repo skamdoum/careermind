@@ -13,24 +13,34 @@ export async function POST(req: Request) {
 
     const {
       data: { user },
-      error: userError,
     } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: userError?.message || "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    let resumeText = "";
+    let jobDescription = "";
+    let targetRole = "";
+    let targetLevel = "";
+    let latestResume: any = null;
+    let guestResumeFile: File | null = null;
 
-    const body = await req.json();
-    const {
-      resumeText,
-      jobDescription,
-      targetRole,
-      targetLevel,
-      latestResume,
-    } = body;
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+
+      resumeText = String(formData.get("resumeText") || "");
+      jobDescription = String(formData.get("jobDescription") || "");
+      targetRole = String(formData.get("targetRole") || "");
+      targetLevel = String(formData.get("targetLevel") || "");
+      guestResumeFile = formData.get("resumeFile") as File | null;
+    } else {
+      const body = await req.json();
+
+      resumeText = body.resumeText || "";
+      jobDescription = body.jobDescription || "";
+      targetRole = body.targetRole || "";
+      targetLevel = body.targetLevel || "";
+      latestResume = body.latestResume || null;
+    }
 
     if (!jobDescription) {
       return NextResponse.json(
@@ -39,61 +49,82 @@ export async function POST(req: Request) {
       );
     }
 
-    const { count } = await supabase
-      .from("analyses")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id);
-
-    const FREE_ANALYSIS_LIMIT = 50;
-    if ((count || 0) >= FREE_ANALYSIS_LIMIT) {
-      return NextResponse.json(
-        {
-          error: "Free limit reached",
-          code: "LIMIT_REACHED",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (!resumeText && !latestResume?.file_path) {
+    if (!resumeText && !latestResume?.file_path && !guestResumeFile) {
       return NextResponse.json(
         { error: "Provide resume text or upload a resume first" },
         { status: 400 }
       );
     }
 
-      let resumeContentParts: any[] = [];
+    if (user) {
+      const FREE_ANALYSIS_LIMIT = 50;
 
-      if (latestResume?.file_path) {
-        const { data: fileData, error: downloadError } = await supabaseAdmin.storage
-          .from("resumes")
-          .download(latestResume.file_path);
+      const { count } = await supabase
+        .from("analyses")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
 
-        if (downloadError) {
-          throw downloadError;
-        }
+      if ((count || 0) >= FREE_ANALYSIS_LIMIT) {
+        return NextResponse.json(
+          {
+            error: "Free limit reached",
+            code: "LIMIT_REACHED",
+          },
+          { status: 403 }
+        );
+      }
+    }
 
-        const bytes = Buffer.from(await fileData.arrayBuffer());
+    let resumeContentParts: any[] = [];
 
-        const openaiFile = await openai.files.create({
-          file: new File([bytes], latestResume.file_name || "resume.pdf", {
-            type: latestResume.mime_type || "application/octet-stream",
-          }),
-          purpose: "user_data",
-        });
+    // Logged-in file from Supabase Storage
+    if (latestResume?.file_path) {
+      const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+        .from("resumes")
+        .download(latestResume.file_path);
 
-        resumeContentParts.push({
-          type: "input_file",
-          file_id: openaiFile.id,
-        });
+      if (downloadError) {
+        throw downloadError;
       }
 
-      if (resumeText) {
-        resumeContentParts.push({
-          type: "input_text",
-          text: `RESUME TEXT FALLBACK:\n${resumeText}`,
-        });
-      }
+      const bytes = Buffer.from(await fileData.arrayBuffer());
+
+      const openaiFile = await openai.files.create({
+        file: new File([bytes], latestResume.file_name || "resume.pdf", {
+          type: latestResume.mime_type || "application/octet-stream",
+        }),
+        purpose: "user_data",
+      });
+
+      resumeContentParts.push({
+        type: "input_file",
+        file_id: openaiFile.id,
+      });
+    }
+
+    // Guest file direct upload
+    if (guestResumeFile) {
+      const bytes = Buffer.from(await guestResumeFile.arrayBuffer());
+
+      const openaiFile = await openai.files.create({
+        file: new File([bytes], guestResumeFile.name || "resume.pdf", {
+          type: guestResumeFile.type || "application/octet-stream",
+        }),
+        purpose: "user_data",
+      });
+
+      resumeContentParts.push({
+        type: "input_file",
+        file_id: openaiFile.id,
+      });
+    }
+
+    if (resumeText) {
+      resumeContentParts.push({
+        type: "input_text",
+        text: `RESUME TEXT FALLBACK:\n${resumeText}`,
+      });
+    }
     const response = await openai.responses.create({
       model: "gpt-5.4",
       input: [
@@ -103,62 +134,198 @@ export async function POST(req: Request) {
             {
               type: "input_text",
            text: `
-You are CareerMind, an expert PM career coach for experienced Product Managers targeting competitive roles.
+You are CareerMind, an expert career coach for experienced Product Managers targeting competitive roles.
 
-Your job is NOT to describe the candidate. Your job is to make a clear hiring judgment and tell them exactly what to fix.
+Your task is to evaluate how well a candidate fits a specific Product Manager role and provide clear, decisive, and actionable guidance to maximize interview and hiring success.
 
-OUTPUT REQUIREMENTS:
+You must:
+1. Identify the most important requirements of the job
+2. Evaluate the resume strictly against those requirements
+3. Make a clear, calibrated hiring judgment
+4. Provide actionable improvement guidance
 
-1. POSITIONING SUMMARY
-- Answer clearly: Would YOU likely get an interview? (Yes / Borderline / No)
-- Be direct and decisive
-- 3–5 sentences max
+Do not summarize the resume. Focus only on evaluation, gaps, and actions.
 
-2. CORE VERDICT
-- One of: "Strong Hire", "Borderline", "Below Bar"
-- This must align with how a real hiring panel would evaluate
+---
 
-3. TOP SIGNALS (max 6)
-Each must include:
-- name
-- score (1–5)
-- reasoning (specific)
-- evidence (bullet list)
-- importance (High / Medium / Low)
+# Decision Framework
 
-4. CRITICAL GAPS (max 4)
-Each must include:
-- title
-- description
-- why_this_matters (tie directly to hiring decision)
-- severity (High / Medium / Low)
+Apply this strict priority order when determining fit:
 
-5. PRIORITIZED ACTION PLAN (max 5 tasks)
-Each must include:
-- title
-- description
-- task_type (resume, story, interview_prep, application, networking, strategy)
-- priority (High / Medium / Low)
-- expected_impact (what improves if done)
+1. **Direct Evidence of Relevant Product Ownership (HIGHEST PRIORITY)**
+   - Named products, launches, or features
+   - Clear ownership (e.g., “led”, “owned”, “delivered”)
+   - Measurable outcomes (ARR, adoption, NRR, engagement, etc.)
+   - If strong, directly relevant evidence exists, it should heavily influence fit
 
-6. NEXT BEST ACTION
-- ONE action only
-- must be the highest-leverage step
-- must take <30 minutes to start
+2. **Core Domain Requirements**
+   - Must-have experience required to succeed in the role
+   - If missing, fit must be downgraded regardless of general strength
 
-STYLE:
-- speak directly to the candidate using "you"
-- be direct but professional
-- avoid third-person phrasing like "the candidate"
-- no fluff
-- no generic advice
+3. **Role-Shape Alignment (LOWEST PRIORITY)**
+   - Alignment between candidate’s background and role scope (e.g., platform vs workflow, AI vs generalist)
+   - Used only to refine decisions—not override strong evidence
 
-- risk_level must be exactly one of: low, medium, high
-- importance must be exactly one of: High, Medium, Low
-- severity must be exactly one of: High, Medium, Low
-- task priority must be exactly one of: High, Medium, Low
+---
 
-Return only valid JSON.
+# Interpretation Rules
+
+## Evidence Recognition
+- Identify explicit product names, launches, or owned initiatives
+- Treat named products or 0→X outcomes as strong ownership signals
+- Do not ignore clearly stated product ownership
+- If a product directly matches the role domain, treat it as a primary signal
+
+
+## Fit Calibration
+- Fit must reflect readiness for THIS role—not general seniority
+- Do not assign "High" if core domain capability is missing
+- Adjacent experience ≠ direct experience
+- Transferable skills support—but do not justify—strong fit alone
+- When direct experience is missing, assess whether adjacent experience is strong enough to support near-term execution in the role. If yes, this may support "Medium"; if not, prefer "Low".
+
+## Specialization vs Generalization
+- Strong specialization (AI, infra, platform, etc.) does NOT imply strong fit for a broader role
+- If role is generalist and candidate is specialized, lean toward "Medium"
+- HOWEVER: if direct relevant product ownership exists, do NOT penalize for specialization
+
+## Positive Evidence Override
+- Strong, explicit, relevant product ownership overrides inferred gaps
+- Measurable outcomes (ARR, adoption, NRR) carry high weight
+- Do not downgrade a candidate if clear evidence proves capability
+
+## Final Calibration Rule
+When signals conflict:
+- Direct evidence > domain assumptions > role-shape adjustments
+
+# Gap Specificity Rules
+
+- Identify gaps at the level of concrete responsibilities, not broad categories.
+- Break down missing experience into the specific practices, metrics, or systems required by the role.
+
+- For infrastructure or reliability roles, explicitly evaluate and call out gaps in:
+  - SLO/SLI definition and management
+  - Latency and performance optimization (e.g., p95/p99)
+  - Capacity planning and scaling decisions
+  - Incident management and postmortem processes
+  - On-call experience and operational readiness
+  - Observability systems (alerts, dashboards, telemetry)
+  - Operational metrics (MTTR, error rate, availability, cost efficiency)
+
+- Do not collapse multiple missing requirements into a single generic gap.
+- Each critical gap should represent a distinct missing capability.
+
+- Avoid vague gaps such as "technical depth" or "infra experience" when more specific deficiencies can be identified.
+
+- Gaps must map directly to the job’s success criteria and measurable outcomes.
+
+
+---
+
+# Output Requirements
+
+Return a single valid JSON object with the following structure:
+
+{
+"fit": "High" | "Medium" | "Low",
+
+"positioning_summary": "...",
+
+"core_verdict": "Strong Hire" | "Borderline" | "Below Bar",
+
+"top_signals": [
+  {
+    "name": "...",
+    "score": 1-5,
+    "reasoning": "...",
+    "evidence": ["...", "..."],
+    "importance": "High" | "Medium" | "Low"
+  }
+],
+
+"primary_gap": "...",
+
+"critical_gaps": [
+  {
+    "title": "...",
+    "description": "...",
+    "why_this_matters": "...",
+    "severity": "High" | "Medium" | "Low"
+  }
+],
+
+"prioritized_action_plan": [
+  {
+    "title": "...",
+    "description": "...",
+    "task_type": "resume" | "story" | "interview_prep" | "application" | "networking" | "strategy",
+    "priority": "High" | "Medium" | "Low",
+    "expected_impact": "..."
+  }
+],
+
+"next_best_action": "..."
+}
+
+---
+
+# Section Rules
+
+## Fit
+- One of: High / Medium / Low
+- Must reflect true hiring readiness
+
+## Positioning Summary
+- Start with: Yes / Borderline / No (likelihood of interview)
+- 3–5 direct sentences
+- No fluff
+
+## Core Verdict
+- Strong Hire / Borderline / Below Bar
+- Must align with fit
+
+## Top Signals
+- Max 6
+- Focus on strongest hiring drivers
+- Use concrete evidence
+
+## Critical Gaps
+- Max 4
+- Must impact hiring decision
+- Avoid generic weaknesses
+
+## Action Plan
+- Max 5
+- Must be specific and actionable
+- Prioritize highest leverage
+
+## Next Best Action
+- One step
+- Must be doable within 30 minutes
+
+---
+
+# Style Guidelines
+
+- Speak directly to the candidate (“you”)
+- Be direct, precise, and professional
+- No hedging or vague language
+- No third-person phrasing
+- No fluff
+
+---
+
+# Constraints
+
+- Output ONLY valid JSON
+- Do not include explanations outside JSON
+- Do not omit any required fields
+- Keep response concise and high-signal (target ~500–700 words)
+
+---
+
+Remember:
+Your job is to make a clear hiring judgment, justify it with evidence, and tell the candidate exactly what to fix.
 ` }
           ]
         },
@@ -184,94 +351,92 @@ Return only valid JSON.
           type: "json_schema",
           name: "careermind_initial_analysis",
           strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              positioning_summary: { type: "string" },
-              core_verdict: {
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            fit: {
+              type: "string",
+              enum: ["High", "Medium", "Low"]
+            },
+            positioning_summary: { type: "string" },
+            core_verdict: {
               type: "string",
               enum: ["Strong Hire", "Borderline", "Below Bar"]
-               },
-              signals: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    signal_name: { type: "string" },
-                    score: { type: "integer", minimum: 1, maximum: 5 },
-                    rationale: { type: "string" },
-                    evidence: {
-                      type: "array",
-                      items: { type: "string" }
-                    },
-                    risk_level: {
-                    type: "string",
-                    enum: ["low", "medium", "high"]
-                    },
-                   importance: {
-                      type: "string",
-                      enum: ["High", "Medium", "Low"]
-                    }
-                  },
-                  required: [
-                    "signal_name",
-                    "score",
-                    "rationale",
-                    "evidence",
-                    "risk_level",
-                    "importance"
-                  ]
-                }
-              },
-              gaps: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    gap_title: { type: "string" },
-                    gap_description: { type: "string" },
-                    priority: { type: "integer" },
-                    recommended_fix: { type: "string" }
-                  },
-                  required: [
-                    "gap_title",
-                    "gap_description",
-                    "priority",
-                    "recommended_fix"
-                  ]
-                }
-              },
-              plan: {
+            },
+            top_signals: {
+              type: "array",
+              items: {
                 type: "object",
                 additionalProperties: false,
                 properties: {
-                  next_best_action: { type: "string" },
-                  tasks: {
+                  name: { type: "string" },
+                  score: { type: "integer", minimum: 1, maximum: 5 },
+                  reasoning: { type: "string" },
+                  evidence: {
                     type: "array",
-                    items: {
-                      type: "object",
-                      additionalProperties: false,
-                      properties: {
-                        title: { type: "string" },
-                        description: { type: "string" },
-                        priority: { type: "integer" },
-                        task_type: {
-                          type: "string",
-                          enum: ["resume", "story", "interview_prep", "application", "networking", "strategy"]
-                        }
-                      },
-                      required: ["title", "description", "priority", "task_type"]
-                    }
+                    items: { type: "string" }
+                  },
+                  importance: {
+                    type: "string",
+                    enum: ["High", "Medium", "Low"]
                   }
                 },
-                required: ["next_best_action", "tasks"]
+                required: ["name", "score", "reasoning", "evidence", "importance"]
               }
             },
-            required: ["positioning_summary", "core_verdict", "signals", "gaps", "plan"]
-          }
+            primary_gap: { type: "string" },
+            critical_gaps: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  why_this_matters: { type: "string" },
+                  severity: {
+                    type: "string",
+                    enum: ["High", "Medium", "Low"]
+                  }
+                },
+                required: ["title", "description", "why_this_matters", "severity"]
+              }
+            },
+            prioritized_action_plan: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  task_type: {
+                    type: "string",
+                    enum: ["resume", "story", "interview_prep", "application", "networking", "strategy"]
+                  },
+                  priority: {
+                    type: "string",
+                    enum: ["High", "Medium", "Low"]
+                  },
+                  expected_impact: { type: "string" }
+                },
+                required: ["title", "description", "task_type", "priority", "expected_impact"]
+              }
+            },
+            next_best_action: { type: "string" }
+          },
+          required: [
+            "fit",
+            "positioning_summary",
+            "core_verdict",
+            "top_signals",
+            "primary_gap",
+            "critical_gaps",
+            "prioritized_action_plan",
+            "next_best_action"
+          ]
+        }
         }
       }
     });
@@ -279,140 +444,154 @@ Return only valid JSON.
     const content = response.output_text;
     const parsed = JSON.parse(content);
 
-    const { data: analysisRow, error: analysisError } = await supabaseAdmin
-      .from("analyses")
-      .insert({
-        user_id: user.id,
-        analysis_type: "initial_onboarding",
-        model_name: "gpt-5.4",
-        raw_json: parsed,
-        summary: parsed.positioning_summary,
-        status: "completed"
-      })
-      .select()
-      .single();
+    console.log("PARSED ANALYZE OUTPUT:", JSON.stringify(parsed, null, 2));
 
-    if (analysisError) throw analysisError;
+const normalized = {
+  fit: parsed.fit,
+  core_verdict: parsed.core_verdict,
+  positioning_summary: parsed.positioning_summary,
+  primary_gap: parsed.primary_gap,
 
-    const analysisId = analysisRow.id;
+  signals: (parsed.top_signals || []).map((s: any) => ({
+    signal_name: s.name,
+    score: s.score,
+    rationale: s.reasoning,
+    evidence: s.evidence || [],
+    importance: s.importance,
+    risk_level: "medium",
+  })),
 
-    if (parsed.signals?.length) {
-const normalizeRiskLevel = (value: unknown): "low" | "medium" | "high" => {
-  const v = String(value || "").trim().toLowerCase();
+  gaps: (parsed.critical_gaps || []).map((g: any, index: number) => ({
+    gap_title: g.title,
+    gap_description: g.description,
+    why_this_matters: g.why_this_matters,
+    severity: g.severity,
+    priority: index + 1,
+    recommended_fix: g.why_this_matters,
+  })),
 
-  if (v === "low") return "low";
-  if (v === "medium") return "medium";
-  if (v === "high") return "high";
-
-  return "medium";
+  plan: {
+    next_best_action: parsed.next_best_action || "",
+    tasks: (parsed.prioritized_action_plan || []).map((t: any) => ({
+      title: t.title,
+      description: t.description,
+      task_type: t.task_type,
+      priority:
+        t.priority === "High" ? 1 :
+        t.priority === "Medium" ? 2 : 3,
+      priority_label: t.priority,
+      expected_impact: t.expected_impact,
+    })),
+  },
 };
 
-const normalizePriorityLabel = (value: unknown): "High" | "Medium" | "Low" => {
-  const v = String(value || "").trim().toLowerCase();
+let analysisId: string | null = null;
+let planId: string | null = null;
 
-  if (v === "high") return "High";
-  if (v === "medium") return "Medium";
-  if (v === "low") return "Low";
+if (user) {
+  const { data: analysisRow, error: analysisError } = await supabaseAdmin
+    .from("analyses")
+    .insert({
+      user_id: user.id,
+      analysis_type: "initial_onboarding",
+      model_name: "gpt-5.4",
+      raw_json: normalized,
+      summary: normalized.positioning_summary,
+      status: "completed",
+    })
+    .select()
+    .single();
 
-  return "Medium";
-};
+  if (analysisError) throw analysisError;
 
-const signalRows = parsed.signals.map((s: any) => ({
-  analysis_id: analysisId,
-  user_id: user.id,
-  signal_name: s.signal_name,
-  score: Math.max(1, Math.min(5, Number(s.score) || 1)),
-  rationale: s.rationale,
-  evidence: s.evidence,
-  risk_level: normalizeRiskLevel(s.risk_level),
-}));
+  analysisId = analysisRow.id;
 
-      const { error } = await supabaseAdmin
-        .from("signal_assessments")
-        .insert(signalRows);
+  if (normalized.signals?.length) {
+    const signalRows = normalized.signals.map((s: any) => ({
+      analysis_id: analysisId,
+      user_id: user.id,
+      signal_name: s.signal_name,
+      score: Math.max(1, Math.min(5, Number(s.score) || 1)),
+      rationale: s.rationale,
+      evidence: s.evidence,
+      risk_level:
+        s.importance === "High" ? "high" :
+       s.importance === "Medium" ? "medium" : "low",
+    }));
 
-      if (error) throw error;
-    }
+    const { error } = await supabaseAdmin
+      .from("signal_assessments")
+      .insert(signalRows);
 
-    if (parsed.gaps?.length) {
-      const gapRows = parsed.gaps.map((g: any) => ({
-        analysis_id: analysisId,
-        user_id: user.id,
-        gap_title: g.gap_title,
-        gap_description: g.gap_description,
-        priority: g.priority,
-        recommended_fix: g.recommended_fix
-      }));
+    if (error) throw error;
+  }
 
-      const { error } = await supabaseAdmin
-        .from("gaps")
-        .insert(gapRows);
+  if (normalized.gaps?.length) {
+    const gapRows = normalized.gaps.map((g: any) => ({
+      analysis_id: analysisId,
+      user_id: user.id,
+      gap_title: g.gap_title,
+      gap_description: g.gap_description,
+      priority: g.priority,
+      recommended_fix: g.recommended_fix,
+    }));
 
-      if (error) throw error;
-    }
+    const { error } = await supabaseAdmin
+      .from("gaps")
+      .insert(gapRows);
 
-    const { data: planRow, error: planError } = await supabaseAdmin
-      .from("plans")
-      .insert({
-        user_id: user.id,
-        analysis_id: analysisId,
-        plan_type: "initial",
-        next_best_action: parsed.plan.next_best_action
-      })
-      .select()
-      .single();
+    if (error) throw error;
+  }
 
-    if (planError) throw planError;
+  const { data: planRow, error: planError } = await supabaseAdmin
+    .from("plans")
+    .insert({
+      user_id: user.id,
+      analysis_id: analysisId,
+      plan_type: "initial",
+      next_best_action: normalized.plan.next_best_action,
+    })
+    .select()
+    .single();
 
-    if (parsed.plan?.tasks?.length) {
-      const allowedTaskTypes = new Set([
+  if (planError) throw planError;
+
+  planId = planRow.id;
+
+  if (normalized.plan?.tasks?.length) {
+    const taskRows = normalized.plan.tasks.map((t: any) => ({
+      plan_id: planId,
+      user_id: user.id,
+      title: t.title,
+      description: t.description,
+      priority: t.priority || 3,
+      task_type: [
         "resume",
         "story",
         "interview_prep",
         "application",
         "networking",
         "strategy",
-      ]);
+      ].includes(t.task_type)
+        ? t.task_type
+        : "strategy",
+      status: "not_started",
+    }));
 
-      const normalizeTaskType = (value: unknown): string => {
-        const v = String(value || "").trim().toLowerCase();
+    const { error } = await supabaseAdmin
+      .from("plan_tasks")
+      .insert(taskRows);
 
-        if (allowedTaskTypes.has(v)) return v;
+    if (error) throw error;
+  }
+}
 
-        // simple fallback mapping
-        if (["branding", "positioning", "profile"].includes(v)) return "strategy";
-        if (["resume_edit", "resume_review", "cv"].includes(v)) return "resume";
-        if (["storytelling", "story_bank"].includes(v)) return "story";
-        if (["interview", "prep"].includes(v)) return "interview_prep";
-        if (["apply", "job_apply"].includes(v)) return "application";
-        if (["outreach", "reachout"].includes(v)) return "networking";
-
-        return "strategy";
-      };
-
-      const taskRows = parsed.plan.tasks.map((t: any) => ({
-        plan_id: planRow.id,
-        user_id: user.id,
-        title: t.title,
-        description: t.description,
-        priority: Math.max(1, Math.min(5, Number(t.priority) || 3)),
-        task_type: normalizeTaskType(t.task_type),
-        status: "not_started"
-      }));
-
-      const { error } = await supabaseAdmin
-        .from("plan_tasks")
-        .insert(taskRows);
-
-      if (error) throw error;
-    }
-
-    return NextResponse.json({
-      success: true,
-      analysisId,
-      planId: planRow.id,
-      result: parsed
-    });
+return NextResponse.json({
+  success: true,
+  analysisId,
+  planId,
+  result: normalized,
+});
   } catch (error: any) {
     console.error("Analyze API error:", error);
 

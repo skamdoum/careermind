@@ -5,6 +5,20 @@ import { useEffect, useState } from "react";
 export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
 
+  function dedupeStrings(items: string[] | undefined): string[] {
+    if (!items) return [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of items) {
+      const trimmed = String(raw).trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || seen.has(key)) continue;
+      seen.add(key);
+      result.push(trimmed);
+    }
+    return result;
+  }
+
   useEffect(() => {
     async function loadInsights() {
       const res = await fetch("/api/insights");
@@ -67,6 +81,20 @@ export default function Insights({ className = "" }: { className?: string }) {
             </div>
           )}
 
+          {insights.top_gaps?.length > 1 && (
+            <div className="p-3 border rounded bg-white">
+              <div className="text-xs text-gray-500 mb-2">Other recurring gaps</div>
+              <ul className="text-sm space-y-1">
+                {insights.top_gaps.slice(1).map((g: any, i: number) => (
+                  <li key={i} className="flex justify-between">
+                    <span>{g.name}</span>
+                    <span className="text-gray-500">{g.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {insights.top_signal && (
             <div className="p-3 border rounded bg-green-50">
               <div className="text-xs text-gray-500 mb-1">Strongest recurring signal</div>
@@ -77,11 +105,25 @@ export default function Insights({ className = "" }: { className?: string }) {
             </div>
           )}
 
-          {insights.recommended_focus?.length > 0 && (
+          {insights.top_signals?.length > 1 && (
+            <div className="p-3 border rounded bg-white">
+              <div className="text-xs text-gray-500 mb-2">Other recurring signals</div>
+              <ul className="text-sm space-y-1">
+                {insights.top_signals.slice(1).map((s: any, i: number) => (
+                  <li key={i} className="flex justify-between">
+                    <span>{s.name}</span>
+                    <span className="text-gray-500">{s.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {dedupeStrings(insights.recommended_focus).length > 0 && (
             <div className="p-4 border rounded bg-purple-50">
               <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
               <ul className="text-sm space-y-1 list-disc list-inside">
-                {insights.recommended_focus.map((focus: string, i: number) => (
+                {dedupeStrings(insights.recommended_focus).map((focus: string, i: number) => (
                   <li key={i}>{focus}</li>
                 ))}
               </ul>

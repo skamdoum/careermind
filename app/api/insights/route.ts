@@ -1,6 +1,39 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+const KEYWORD_GROUPS: { label: string; keywords: string[] }[] = [
+  { label: "Strategy & roadmap", keywords: ["strategy", "roadmap"] },
+  { label: "AI / ML", keywords: ["ai", "ml", "machine learning", "artificial intelligence"] },
+];
+
+const FILLER_WORDS = new Set([
+  "a", "an", "and", "as", "at", "be", "but", "by", "evidence", "for", "from",
+  "in", "is", "it", "its", "no", "not", "of", "on", "or", "the", "to", "with",
+]);
+
+function simplifyFallback(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const filtered = words.filter((w) => !FILLER_WORDS.has(w.toLowerCase()));
+  const kept = filtered.length > 0 ? filtered : words;
+  return kept.slice(0, 5).join(" ");
+}
+
+function focusLabelFor(name: string): string {
+  const normalized = name.trim().toLowerCase();
+  const tokens = new Set(normalized.split(/[^a-z0-9]+/).filter(Boolean));
+
+  for (const group of KEYWORD_GROUPS) {
+    for (const kw of group.keywords) {
+      const lowerKw = kw.toLowerCase();
+      const matched = lowerKw.includes(" ")
+        ? normalized.includes(lowerKw)
+        : tokens.has(lowerKw);
+      if (matched) return group.label;
+    }
+  }
+  return simplifyFallback(name);
+}
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -57,9 +90,18 @@ export async function GET() {
       .slice(0, TOP_N)
       .map(([name, count]) => ({ name, count }));
 
-    const recommended_focus = Array.from(
-      new Set(top_gaps.map((g) => g.name.trim()).filter(Boolean))
-    ).slice(0, 3);
+    const focusCounts: Record<string, number> = {};
+    for (const [rawName, count] of Object.entries(gapCounts)) {
+      const trimmed = String(rawName).trim();
+      if (!trimmed) continue;
+      const label = focusLabelFor(trimmed);
+      focusCounts[label] = (focusCounts[label] || 0) + count;
+    }
+
+    const recommended_focus = Object.entries(focusCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label]) => label);
 
     return NextResponse.json({
       success: true,

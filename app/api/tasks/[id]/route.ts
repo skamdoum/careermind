@@ -15,7 +15,7 @@ export async function PATCH(req: Request, { params }: RouteProps) {
 
     if (!allowedStatuses.includes(status)) {
       return NextResponse.json(
-        { error: "Invalid status" },
+        { success: false, error: "Invalid status" },
         { status: 400 }
       );
     }
@@ -33,13 +33,13 @@ export async function PATCH(req: Request, { params }: RouteProps) {
 
     return NextResponse.json({
       success: true,
-      task: data,
+      data,
     });
   } catch (error: any) {
     console.error("Task update error:", error);
 
     return NextResponse.json(
-      { error: error?.message || "Failed to update task" },
+      { success: false, error: error?.message || "Failed to update task" },
       { status: 500 }
     );
   }

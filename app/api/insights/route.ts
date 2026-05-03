@@ -10,7 +10,7 @@ export async function GET() {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: analyses } = await supabase
@@ -19,7 +19,7 @@ export async function GET() {
       .eq("user_id", user.id);
 
     if (!analyses || analyses.length === 0) {
-      return NextResponse.json({ insights: null });
+      return NextResponse.json({ success: true, data: null });
     }
 
     const gapCounts: Record<string, number> = {};
@@ -45,18 +45,35 @@ export async function GET() {
       });
     }
 
-    const topGap = Object.entries(gapCounts).sort((a, b) => b[1] - a[1])[0];
-    const topSignal = Object.entries(signalCounts).sort((a, b) => b[1] - a[1])[0];
+    const TOP_N = 3;
+
+    const top_gaps = Object.entries(gapCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_N)
+      .map(([name, count]) => ({ name, count }));
+
+    const top_signals = Object.entries(signalCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP_N)
+      .map(([name, count]) => ({ name, count }));
+
+    const recommended_focus = Array.from(
+      new Set(top_gaps.map((g) => g.name.trim()).filter(Boolean))
+    ).slice(0, 3);
 
     return NextResponse.json({
-      insights: {
-        top_gap: topGap ? { name: topGap[0], count: topGap[1] } : null,
-        top_signal: topSignal ? { name: topSignal[0], count: topSignal[1] } : null,
+      success: true,
+      data: {
+        top_gap: top_gaps[0] || null,
+        top_signal: top_signals[0] || null,
+        top_gaps,
+        top_signals,
+        recommended_focus,
         total_analyses: analyses.length,
       },
     });
   } catch (err) {
     console.error("INSIGHTS ERROR:", err);
-    return NextResponse.json({ error: "Failed to load insights" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to load insights" }, { status: 500 });
   }
 }

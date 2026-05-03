@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
     if (userError || !user) {
       return NextResponse.json(
-        { error: userError?.message || "Unauthorized" },
+        { success: false, error: userError?.message || "Unauthorized" },
         { status: 401 }
       );
     }
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     if (!filePath || !fileName) {
       return NextResponse.json(
-        { error: "Missing filePath or fileName" },
+        { success: false, error: "Missing filePath or fileName" },
         { status: 400 }
       );
     }
@@ -42,15 +42,15 @@ export async function POST(req: Request) {
 
     if (error) {
       return NextResponse.json(
-        { error: error.message },
+        { success: false, error: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true, resume: data });
+    return NextResponse.json({ success: true, data });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "Failed to save resume metadata" },
+      { success: false, error: error?.message || "Failed to save resume metadata" },
       { status: 500 }
     );
   }

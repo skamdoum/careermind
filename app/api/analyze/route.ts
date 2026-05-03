@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
     if (userError || !user) {
       return NextResponse.json(
-        { error: userError?.message || "Unauthorized" },
+        { success: false, error: userError?.message || "Unauthorized" },
         { status: 401 }
       );
     }
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
     if (!jobDescription) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { success: false, error: "Missing required fields" },
         { status: 400 }
       );
     }
@@ -48,8 +48,9 @@ export async function POST(req: Request) {
     if ((count || 0) >= FREE_ANALYSIS_LIMIT) {
       return NextResponse.json(
         {
+          success: false,
           error: "Free limit reached",
-          code: "LIMIT_REACHED",
+          data: { code: "LIMIT_REACHED" },
         },
         { status: 403 }
       );
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
 
     if (!resumeText && !latestResume?.file_path) {
       return NextResponse.json(
-        { error: "Provide resume text or upload a resume first" },
+        { success: false, error: "Provide resume text or upload a resume first" },
         { status: 400 }
       );
     }
@@ -327,6 +328,8 @@ const signalRows = parsed.signals.map((s: any) => ({
   risk_level: normalizeRiskLevel(s.risk_level),
 }));
 
+ console.log("PARSED RESULT:", parsed);
+ 
       const { error } = await supabaseAdmin
         .from("signal_assessments")
         .insert(signalRows);
@@ -409,15 +412,18 @@ const signalRows = parsed.signals.map((s: any) => ({
 
     return NextResponse.json({
       success: true,
-      analysisId,
-      planId: planRow.id,
-      result: parsed
+      data: {
+        analysisId,
+        planId: planRow.id,
+        result: parsed,
+      },
     });
   } catch (error: any) {
     console.error("Analyze API error:", error);
 
     return NextResponse.json(
       {
+        success: false,
         error: error?.message || "Something went wrong"
       },
       { status: 500 }

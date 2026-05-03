@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const { resumeText, latestResume, jobDescriptions } = await req.json();
 
     if ((!resumeText && !latestResume?.file_path) || !jobDescriptions || jobDescriptions.length === 0) {
-      return NextResponse.json({ error: "Missing input" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Missing input" }, { status: 400 });
     }
 
     let resumeContentParts: any[] = [];
@@ -94,9 +94,9 @@ Be direct, specific, and decisive.`
 
     results.sort((a, b) => b.score - a.score);
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ success: true, data: results });
   } catch (err) {
     console.error("COMPARE API ERROR:", err);
-    return NextResponse.json({ error: "Compare failed" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Compare failed" }, { status: 500 });
   }
 }

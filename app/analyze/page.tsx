@@ -43,9 +43,10 @@ export default function AnalyzePage() {
 
     const res = await fetch("/api/resumes/latest");
     const data = await res.json();
+    console.log("FRONTEND RESULT:", data);
 
     if (!res.ok) {
-      if (data.code === "LIMIT_REACHED") {
+      if (data.data?.code === "LIMIT_REACHED") {
         setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
         return;
       }
@@ -55,8 +56,8 @@ export default function AnalyzePage() {
     }
 
     // 👉 SET LATEST RESUME IF EXISTS
-    if (data?.resume) {
-      setLatestResume(data.resume);
+    if (data?.data) {
+      setLatestResume(data.data);
     }
   }
 
@@ -105,8 +106,8 @@ export default function AnalyzePage() {
         throw new Error(data.error || "Failed to save resume metadata");
       }
 
-      setUploadedResume(data.resume);
-      setLatestResume(data.resume);
+      setUploadedResume(data.data);
+      setLatestResume(data.data);
       setStatus("Resume uploaded successfully");
     } catch (error: any) {
       console.error(error);
@@ -145,7 +146,7 @@ async function handleAnalyze() {
     const data = await res.json();
 
     if (!res.ok) {
-      if (data.code === "LIMIT_REACHED") {
+      if (data.data?.code === "LIMIT_REACHED") {
         setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
         return;
       }
@@ -156,7 +157,8 @@ async function handleAnalyze() {
     }
 
     setStatus("Analysis complete");
-    setResult(data.result);
+    console.log("RESULT SENT TO UI:", data.data?.result);
+    setResult(data.data?.result);
   } catch (error) {
     console.error(error);
     setStatus("Request failed");
@@ -197,7 +199,7 @@ async function handleAnalyze() {
       throw new Error(data.error || "Compare failed");
     }
 
-    setCompareResults(data.results || []);
+    setCompareResults(data.data || []);
     setStatus("Job comparison complete");
   } catch (error: any) {
     console.error(error);

@@ -9,7 +9,7 @@ export default function Insights({ className = "" }: { className?: string }) {
     async function loadInsights() {
       const res = await fetch("/api/insights");
       const data = await res.json();
-      setInsights(data.insights);
+      setInsights(data.success ? data.data : null);
     }
 
     loadInsights();
@@ -74,6 +74,17 @@ export default function Insights({ className = "" }: { className?: string }) {
               <div className="text-sm text-gray-600">
                 Appeared in {insights.top_signal.count} analyses
               </div>
+            </div>
+          )}
+
+          {insights.recommended_focus?.length > 0 && (
+            <div className="p-4 border rounded bg-purple-50">
+              <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
+              <ul className="text-sm space-y-1 list-disc list-inside">
+                {insights.recommended_focus.map((focus: string, i: number) => (
+                  <li key={i}>{focus}</li>
+                ))}
+              </ul>
             </div>
           )}
 

@@ -21,6 +21,30 @@ export default function Insights({ className = "" }: { className?: string }) {
     return result;
   }
 
+  function renderStrategyProgress() {
+    let total = 0;
+    let completed = 0;
+    strategy?.actions?.forEach((a: any, i: number) => {
+      a.tasks?.forEach((_: string, j: number) => {
+        total++;
+        if (checkedTasks[`${i}:${j}`]) completed++;
+      });
+    });
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return (
+      <div className="border rounded p-4 bg-gray-50 mb-4 space-y-2">
+        <h3 className="font-semibold">Progress</h3>
+        <div className="text-sm text-gray-700">
+          {completed} / {total} tasks complete
+        </div>
+        <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
+          <div className="bg-black h-3" style={{ width: `${percent}%` }} />
+        </div>
+        <div className="text-sm font-medium">{percent}% complete</div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     async function load() {
       const [insightsRes, strategyRes] = await Promise.all([
@@ -154,6 +178,7 @@ export default function Insights({ className = "" }: { className?: string }) {
         <p className="text-sm text-gray-600 mb-4">
           Your top focus areas with concrete next steps. Check off tasks as you complete them.
         </p>
+        {renderStrategyProgress()}
         <div className="space-y-4">
           {strategy.actions.map((action: any, i: number) => (
             <div key={i} className="border rounded p-4 bg-gray-50">

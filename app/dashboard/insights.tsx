@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
   const [strategy, setStrategy] = useState<any>(null);
+  const [progress, setProgress] = useState<any>(null);
   const [checkedTasks, setCheckedTasks] = useState<Record<string, boolean>>({});
 
   function dedupeStrings(items: string[] | undefined): string[] {
@@ -19,6 +20,49 @@ export default function Insights({ className = "" }: { className?: string }) {
       result.push(trimmed);
     }
     return result;
+  }
+
+  function renderProgressTrend() {
+    if (!progress?.current_verdict || !progress?.previous_verdict) return null;
+
+    const { current_verdict, previous_verdict } = progress;
+    const VERDICT_SCORE: Record<string, number> = {
+      "Below Bar": 1,
+      "Borderline": 2,
+      "Strong Hire": 3,
+    };
+    const cur = VERDICT_SCORE[current_verdict] ?? 0;
+    const prev = VERDICT_SCORE[previous_verdict] ?? 0;
+
+    let interpretation = "Stable";
+    let toneClass = "bg-gray-50";
+    if (cur > prev) {
+      interpretation = "You're improving";
+      toneClass = "bg-green-50";
+    } else if (cur < prev) {
+      interpretation = "Mixed results (job difficulty may vary)";
+      toneClass = "bg-yellow-50";
+    }
+
+    return (
+      <section className={`border rounded p-5 shadow-sm mb-6 ${toneClass}`}>
+        <h2 className="font-semibold text-lg mb-3">Recent Trend</h2>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-600">Previous:</div>
+            <div className="font-medium">{previous_verdict}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-600">Current:</div>
+            <div className="font-medium">{current_verdict}</div>
+          </div>
+          <div className="font-semibold pt-2">{interpretation}</div>
+          <div className="text-xs text-gray-500 pt-1">
+            Verdicts can vary based on job difficulty and fit, not just your progress.
+          </div>
+        </div>
+      </section>
+    );
   }
 
   function renderStrategyProgress() {
@@ -47,14 +91,17 @@ export default function Insights({ className = "" }: { className?: string }) {
 
   useEffect(() => {
     async function load() {
-      const [insightsRes, strategyRes] = await Promise.all([
+      const [insightsRes, strategyRes, progressRes] = await Promise.all([
         fetch("/api/insights"),
         fetch("/api/strategy"),
+        fetch("/api/progress"),
       ]);
       const insightsData = await insightsRes.json();
       const strategyData = await strategyRes.json();
+      const progressData = await progressRes.json();
       setInsights(insightsData.success ? insightsData.data : null);
       setStrategy(strategyData.success ? strategyData.data : null);
+      setProgress(progressData.success ? progressData.data : null);
     }
 
     load();
@@ -168,6 +215,8 @@ export default function Insights({ className = "" }: { className?: string }) {
         </div>
       </div>
     </section>
+
+    {renderProgressTrend()}
 
     {strategy?.actions?.length > 0 && (
       <section className="border rounded p-5 bg-white shadow-sm mb-6">

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
+  const [strategy, setStrategy] = useState<any>(null);
+  const [checkedTasks, setCheckedTasks] = useState<Record<string, boolean>>({});
 
   function dedupeStrings(items: string[] | undefined): string[] {
     if (!items) return [];
@@ -20,13 +22,18 @@ export default function Insights({ className = "" }: { className?: string }) {
   }
 
   useEffect(() => {
-    async function loadInsights() {
-      const res = await fetch("/api/insights");
-      const data = await res.json();
-      setInsights(data.success ? data.data : null);
+    async function load() {
+      const [insightsRes, strategyRes] = await Promise.all([
+        fetch("/api/insights"),
+        fetch("/api/strategy"),
+      ]);
+      const insightsData = await insightsRes.json();
+      const strategyData = await strategyRes.json();
+      setInsights(insightsData.success ? insightsData.data : null);
+      setStrategy(strategyData.success ? strategyData.data : null);
     }
 
-    loadInsights();
+    load();
   }, []);
 
   function getCoachingMessage(insights: any) {
@@ -59,6 +66,7 @@ export default function Insights({ className = "" }: { className?: string }) {
   }
 
   return (
+    <>
     <section className="border rounded p-5 bg-white shadow-sm mb-6">
       <h2 className="font-semibold text-lg mb-4">Career Pattern</h2>
 
@@ -136,5 +144,55 @@ export default function Insights({ className = "" }: { className?: string }) {
         </div>
       </div>
     </section>
+
+    {strategy?.actions?.length > 0 && (
+      <section className="border rounded p-5 bg-white shadow-sm mb-6">
+        <h2 className="font-semibold text-lg mb-1">Your Strategy</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Your top focus areas with concrete next steps. Check off tasks as you complete them.
+        </p>
+        <div className="space-y-4">
+          {strategy.actions.map((action: any, i: number) => (
+            <div key={i} className="border rounded p-4 bg-gray-50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-full bg-black text-white text-sm font-semibold flex items-center justify-center">
+                    {i + 1}
+                  </div>
+                  <h3 className="font-semibold">{action.title}</h3>
+                </div>
+                {action.impact && (
+                  <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 font-medium capitalize">
+                    {action.impact} impact
+                  </span>
+                )}
+              </div>
+              <ul className="text-sm space-y-2">
+                {action.tasks.map((task: string, j: number) => {
+                  const key = `${i}:${j}`;
+                  const checked = !!checkedTasks[key];
+                  return (
+                    <li key={j} className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setCheckedTasks((prev) => ({ ...prev, [key]: !prev[key] }))
+                        }
+                        className="mt-1"
+                      />
+                      <span className={checked ? "line-through text-gray-500" : ""}>
+                        {task}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+    </>
   );
 }

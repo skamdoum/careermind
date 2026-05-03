@@ -13,14 +13,14 @@ const FILLER_WORDS = new Set([
 
 const TASK_TEMPLATES: Record<string, string[]> = {
   "Strategy & roadmap": [
-    "Draft a 1-page roadmap covering 3 strategic bets and trade-offs",
-    "Write a strategy memo aligning OKRs to a 12-month vision",
-    "Map current initiatives to roadmap themes and surface gaps",
+    "Draft a 1-page roadmap with 3 strategic bets, trade-offs, and 6-month milestones",
+    "Write a 500-word strategy memo linking your team's OKRs to a 12-month vision",
+    "Map your 5 most-active initiatives to roadmap themes; flag unfunded gaps",
   ],
   "AI / ML": [
-    "Document one AI/ML project with a measurable business outcome",
-    "Outline an AI use case in your current product domain",
-    "Refresh resume to highlight AI/ML exposure or initiatives",
+    "Document 1 AI/ML project with a measurable revenue or efficiency outcome",
+    "Draft a 1-page AI use case for your product domain, including the success metric",
+    "Add 2 resume bullets quantifying your AI/ML scope and shipped impact",
   ],
 };
 
@@ -50,9 +50,9 @@ function focusLabelFor(name: string): string {
 function actionsFor(label: string): string[] {
   if (TASK_TEMPLATES[label]) return TASK_TEMPLATES[label];
   return [
-    `Outline a concrete plan to address: ${label}`,
-    `Draft a 1-page case study showing impact on: ${label}`,
-    `Identify 2 past examples that demonstrate: ${label}`,
+    `Write a 200-word framing statement of your angle on ${label}`,
+    `Pick 1 past project where you drove ${label}; write 3 bullets with metrics`,
+    `Add 1 resume line quantifying impact specifically tied to ${label}`,
   ];
 }
 

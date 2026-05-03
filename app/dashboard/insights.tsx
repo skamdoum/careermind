@@ -57,6 +57,9 @@ export default function Insights({ className = "" }: { className?: string }) {
             <div className="font-medium">{current_verdict}</div>
           </div>
           <div className="font-semibold pt-2">{interpretation}</div>
+          <div className="text-xs text-gray-700 pt-1">
+            To improve your results, focus on reducing your top recurring gap.
+          </div>
           <div className="text-xs text-gray-500 pt-1">
             Verdicts can vary based on job difficulty and fit, not just your progress.
           </div>
@@ -138,6 +141,15 @@ export default function Insights({ className = "" }: { className?: string }) {
 
   return (
     <>
+    {insights.top_signal && insights.top_gap && (
+      <section className="border rounded p-5 bg-white shadow-sm mb-6">
+        <h2 className="font-semibold text-lg mb-3">Career Summary</h2>
+        <p className="text-gray-800 leading-7">
+          You are strong in {insights.top_signal.name}, but you need to improve {insights.top_gap.name}.
+        </p>
+      </section>
+    )}
+
     <section className="border rounded p-5 bg-white shadow-sm mb-6">
       <h2 className="font-semibold text-lg mb-4">Career Pattern</h2>
 
@@ -198,16 +210,20 @@ export default function Insights({ className = "" }: { className?: string }) {
             </div>
           )}
 
-          {dedupeStrings(insights.recommended_focus).length > 0 && (
-            <div className="p-4 border rounded bg-purple-50">
-              <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
-              <ul className="text-sm space-y-1 list-disc list-inside">
-                {dedupeStrings(insights.recommended_focus).map((focus: string, i: number) => (
-                  <li key={i}>{focus}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {(() => {
+            const items = dedupeStrings(insights.recommended_focus).slice(0, 2);
+            if (items.length === 0) return null;
+            const sentence =
+              items.length === 1
+                ? `Focus on ${items[0]}.`
+                : `Focus on ${items[0]} and ${items[1]}.`;
+            return (
+              <div className="p-4 border rounded bg-purple-50">
+                <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
+                <p className="text-sm">{sentence}</p>
+              </div>
+            );
+          })()}
 
           <div className="text-gray-500 text-sm">
             Based on {insights.total_analyses} total analyses

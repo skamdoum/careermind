@@ -147,7 +147,10 @@ export default function Insights({ className = "" }: { className?: string }) {
 
     {strategy?.actions?.length > 0 && (
       <section className="border rounded p-5 bg-white shadow-sm mb-6">
-        <h2 className="font-semibold text-lg mb-1">Your Strategy</h2>
+        <h2 className="font-semibold text-lg mb-1">Your Career Strategy</h2>
+        <p className="text-sm text-gray-700 mb-1">
+          This is your core improvement plan across roles. Focus here first.
+        </p>
         <p className="text-sm text-gray-600 mb-4">
           Your top focus areas with concrete next steps. Check off tasks as you complete them.
         </p>

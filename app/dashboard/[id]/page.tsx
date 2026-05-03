@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import TaskList from "./task-list";
 import AppNavbar from "@/app/components/app-navbar";
 
 export const dynamic = "force-dynamic";
@@ -40,23 +39,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     .limit(1)
     .single();
 
-  const { data: tasks } = plan
-    ? await supabase
-        .from("plan_tasks")
-        .select("*")
-        .eq("plan_id", plan.id)
-        .order("priority", { ascending: true })
-    : { data: [] };
-
   const data = analysis.raw_json;
-  const totalTasks = tasks?.length || 0;
-  const doneTasks = tasks?.filter((t: any) => t.status === "done").length || 0;
-  const inProgressTasks =
-    tasks?.filter((t: any) => t.status === "in_progress").length || 0;
-  const notStartedTasks =
-    tasks?.filter((t: any) => t.status === "not_started").length || 0;
-  const completionPercent =
-    totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
@@ -99,7 +82,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
       </section>
 
       <section className="border rounded p-5 bg-green-50 shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Next Best Action</h2>
+        <h2 className="font-semibold text-lg mb-3">Job-specific guidance</h2>
         <p className="text-gray-900 font-medium leading-7">
           {plan?.next_best_action || data?.plan?.next_best_action}
         </p>
@@ -170,29 +153,6 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-2">Plan Execution</h2>
-
-        <div className="border rounded p-4 bg-gray-50 mb-4 space-y-2">
-          <h3 className="font-semibold">Progress</h3>
-
-          <div className="text-sm text-gray-700">
-            Total tasks: {totalTasks} | Done: {doneTasks} | In progress:{" "}
-            {inProgressTasks} | Not started: {notStartedTasks}
-          </div>
-
-          <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
-            <div
-              className="bg-black h-3"
-              style={{ width: `${completionPercent}%` }}
-            />
-          </div>
-
-          <div className="text-sm font-medium">{completionPercent}% complete</div>
-        </div>
-
-        <TaskList tasks={tasks || []} />
-      </section>
     </main>
   );
 }

@@ -26,6 +26,65 @@ const EFFORT_BADGE_CLASS: Record<string, string> = {
   High: "bg-red-100 text-red-800",
 };
 
+const SIGNAL_ARCHETYPES: { keywords: string[]; archetype: string }[] = [
+  { keywords: ["execution", "delivery", "ship"], archetype: "execution-focused PM" },
+  { keywords: ["strategy", "vision", "roadmap"], archetype: "strategy-oriented PM" },
+  { keywords: ["data", "analytics", "metrics"], archetype: "data-driven PM" },
+  { keywords: ["growth", "experiment"], archetype: "growth-focused PM" },
+  { keywords: ["discovery", "research", "customer", "user"], archetype: "discovery-led PM" },
+  { keywords: ["leadership", "people", "team", "manage"], archetype: "people-oriented PM" },
+  { keywords: ["ai", "ml", "machine learning"], archetype: "AI-savvy PM" },
+];
+
+const GAP_MISSING: { keywords: string[]; missing: string }[] = [
+  { keywords: ["strategy", "vision", "roadmap"], missing: "senior-level strategy ownership" },
+  { keywords: ["execution", "delivery", "ship"], missing: "consistent execution at scale" },
+  { keywords: ["leadership", "stakeholder", "influence"], missing: "cross-functional leadership" },
+  { keywords: ["data", "analytics", "metrics"], missing: "rigorous use of data" },
+  { keywords: ["growth", "experiment"], missing: "growth experimentation depth" },
+  { keywords: ["discovery", "research", "customer", "user"], missing: "customer discovery rigor" },
+  { keywords: ["ai", "ml", "machine learning"], missing: "AI/ML product fluency" },
+  { keywords: ["scope", "ambig"], missing: "ownership in ambiguous scope" },
+];
+
+const GAP_WHY: { keywords: string[]; why: string }[] = [
+  { keywords: ["strategy", "vision", "roadmap"], why: "Senior PM panels look for evidence you can shape direction, not just execute against it. Without that signal, you'll read as a strong IC rather than a future leader." },
+  { keywords: ["execution", "delivery", "ship"], why: "Hiring panels need to see consistent shipping at scale; without it, your ability to drive outcomes is the first thing questioned." },
+  { keywords: ["leadership", "stakeholder", "influence"], why: "Senior PM roles depend on influencing without authority — one of the most common 'no-hire' signals when it isn't visible in your stories." },
+  { keywords: ["data", "analytics", "metrics"], why: "Senior panels want to see you making and defending decisions with data; vague metrics read as a junior framing." },
+  { keywords: ["growth", "experiment"], why: "Without experimentation depth, your impact stories can read as anecdotal — a frequent flag in growth-oriented loops." },
+  { keywords: ["discovery", "research", "customer", "user"], why: "Without discovery rigor, decisions can read as opinion rather than evidence — a common flag in senior product loops." },
+  { keywords: ["ai", "ml", "machine learning"], why: "Most senior PM roles now expect AI/ML fluency at the strategy level; without it, you narrow the set of orgs that will hire you." },
+];
+
+function lookupArchetype(name: string): string {
+  const lower = name.toLowerCase();
+  for (const entry of SIGNAL_ARCHETYPES) {
+    if (entry.keywords.some((k) => lower.includes(k))) return entry.archetype;
+  }
+  return "well-rounded PM";
+}
+
+function lookupMissing(name: string): string {
+  const lower = name.toLowerCase();
+  for (const entry of GAP_MISSING) {
+    if (entry.keywords.some((k) => lower.includes(k))) return entry.missing;
+  }
+  return "depth in your weakest recurring area";
+}
+
+function lookupGapWhy(name: string): string {
+  const lower = name.toLowerCase();
+  for (const entry of GAP_WHY) {
+    if (entry.keywords.some((k) => lower.includes(k))) return entry.why;
+  }
+  return "This kind of gap typically blocks candidates from clearing the senior-PM bar — panels weight depth here heavily during loop debriefs.";
+}
+
+function withArticle(s: string): string {
+  return /^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`;
+}
+
 export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
   const [strategy, setStrategy] = useState<any>(null);
@@ -136,23 +195,12 @@ export default function Insights({ className = "" }: { className?: string }) {
   }, []);
 
   function getCoachingMessage(insights: any) {
-    if (!insights) return "";
-
-    let message = "";
-
-    if (insights.top_gap) {
-      message += `Across your analyses, your most consistent gap is "${insights.top_gap.name}". `;
-      message += `This is likely the primary blocker for stronger roles.\n\n`;
-    }
-
-    if (insights.top_signal) {
-      message += `Your strongest repeated signal is "${insights.top_signal.name}", which is a clear strength you should lean into.\n\n`;
-    }
-
-    message +=
-      "Focus your effort on addressing your top gap while continuing to emphasize your strongest signal in your positioning.";
-
-    return message;
+    if (!insights?.top_gap) return "";
+    const why = lookupGapWhy(insights.top_gap.name);
+    const closing = insights.top_signal
+      ? "Your strongest signal area is real leverage — lead with it in your next interview narrative."
+      : "";
+    return `${why}\n\n${closing}`.trim();
   }
 
   if (!insights) {
@@ -170,7 +218,7 @@ export default function Insights({ className = "" }: { className?: string }) {
       <section className="border rounded p-5 bg-white shadow-sm mb-6">
         <h2 className="font-semibold text-lg mb-3">Career Summary</h2>
         <p className="text-gray-800 leading-7">
-          You are strong in {insights.top_signal.name}, but you need to improve {insights.top_gap.name}.
+          You are currently positioned as {withArticle(lookupArchetype(insights.top_signal.name))}, but you are not yet demonstrating {lookupMissing(insights.top_gap.name)}.
         </p>
       </section>
     )}
@@ -240,8 +288,8 @@ export default function Insights({ className = "" }: { className?: string }) {
             if (items.length === 0) return null;
             const sentence =
               items.length === 1
-                ? `Focus on ${items[0]}.`
-                : `Focus on ${items[0]} and ${items[1]}.`;
+                ? `Prioritize ${items[0]}.`
+                : `Prioritize ${items[0]} first, then ${items[1]}.`;
             return (
               <div className="p-4 border rounded bg-purple-50">
                 <div className="text-xs text-gray-500 mb-2">Recommended focus</div>

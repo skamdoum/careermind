@@ -47,11 +47,19 @@ export default function AppNavbar() {
 
         <div className="flex items-center gap-2">
           <Link href="/dashboard" className={linkClass("/dashboard")}>
-            Dashboard
+            Overview
+          </Link>
+
+          <Link href="/dashboard/strategy" className={linkClass("/dashboard/strategy")}>
+            Action Plan
+          </Link>
+
+          <Link href="/dashboard/history" className={linkClass("/dashboard/history")}>
+            History
           </Link>
 
           <Link href="/analyze" className={linkClass("/analyze")}>
-            Analyze
+            Run Analysis
           </Link>
         </div>
       </div>

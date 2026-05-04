@@ -85,7 +85,15 @@ function withArticle(s: string): string {
   return /^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`;
 }
 
-export default function Insights({ className = "" }: { className?: string }) {
+type InsightsMode = "overview" | "strategy" | "all";
+
+export default function Insights({
+  className = "",
+  mode = "all",
+}: {
+  className?: string;
+  mode?: InsightsMode;
+}) {
   const [insights, setInsights] = useState<any>(null);
   const [strategy, setStrategy] = useState<any>(null);
   const [progress, setProgress] = useState<any>(null);
@@ -207,7 +215,7 @@ export default function Insights({ className = "" }: { className?: string }) {
     return `${why}\n\n${closing}`.trim();
   }
 
-  if (!insights) {
+  if (!insights && mode !== "strategy") {
     return (
       <section className={`border rounded p-5 bg-white shadow-sm mb-6 ${className}`}>
         <h2 className="font-semibold text-lg mb-3">Career Pattern</h2>
@@ -216,9 +224,12 @@ export default function Insights({ className = "" }: { className?: string }) {
     );
   }
 
+  const showOverview = mode === "all" || mode === "overview";
+  const showStrategy = mode === "all" || mode === "strategy";
+
   return (
     <>
-    {insights.top_signal && insights.top_gap && (
+    {showOverview && insights?.top_signal && insights?.top_gap && (
       <section className="border rounded p-5 bg-white shadow-sm mb-6">
         <h2 className="font-semibold text-lg mb-3">Career Summary</h2>
         <p className="text-gray-800 leading-7">
@@ -228,6 +239,7 @@ export default function Insights({ className = "" }: { className?: string }) {
       </section>
     )}
 
+    {showOverview && insights && (
     <section className="border rounded p-5 bg-white shadow-sm mb-6">
       <h2 className="font-semibold text-lg mb-4">Career Pattern</h2>
 
@@ -312,17 +324,15 @@ export default function Insights({ className = "" }: { className?: string }) {
         </div>
       </div>
     </section>
+    )}
 
-    {renderProgressTrend()}
+    {showOverview && renderProgressTrend()}
 
-    {strategy?.actions?.length > 0 && (
+    {showStrategy && strategy?.actions?.length > 0 && (
       <section className="border rounded p-5 bg-white shadow-sm mb-6">
-        <h2 className="font-semibold text-lg mb-1">Your Career Strategy</h2>
-        <p className="text-sm text-gray-700 mb-1">
-          This is your core improvement plan across roles. Focus here first.
-        </p>
+        <h2 className="font-semibold text-lg mb-1">Your Action Plan</h2>
         <p className="text-sm text-gray-600 mb-4">
-          Your top focus areas with concrete next steps. Update each task's status as you make progress.
+          This is your prioritized execution plan across target roles. Start with P1 tasks and update each status as you make progress.
         </p>
         {renderStrategyProgress()}
         <div className="space-y-4">

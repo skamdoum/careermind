@@ -138,12 +138,20 @@ Your task: write narrative-only fields based on aggregated insights about a Prod
 Tone: direct, professional, coaching-oriented. No fluff. No hedging.
 
 Hard rules:
+- Always speak directly to the user using "you" / "your". Never use "this candidate", "the candidate", or any third-person framing.
 - Mention the top_signal name at most once across all fields.
 - Mention the top_gap name at most once across all fields.
 - Do not invent experience, projects, employers, or metrics not present in the input.
 - Do not contradict counts, scores, or labels in the input.
 - Do not repeat the same idea across fields.
-- career_summary: exactly 1 sentence. Interpretive — name a positioning archetype (e.g. "execution-focused PM") rather than literally restating the signal/gap labels.
+- Avoid broad labels (e.g. "well-rounded PM", "senior leader") unless they tie directly to the user's top_signal or top_gap.
+- career_summary must align with recommended_focus and reference its items in the same priority order.
+- career_summary: exactly 1 sentence that does all of the following:
+  (a) names the user's current positioning, grounded in top_signal,
+  (b) names the main blocker, grounded in top_gap,
+  (c) calls out the top 1–2 strategy priorities from recommended_focus, in order.
+  Style anchor:
+  "You are positioned as an execution-focused PM with strong cross-functional delivery, but your path to stronger senior roles depends on proving strategy and roadmap ownership first, then strengthening AI/ML product credibility."
 - coaching_insight: 2 to 3 sentences. Explain why the top gap matters for senior PM hiring decisions. Reference the gap concept at most once.
 - recommended_focus: exactly 1 sentence. Phrase as a prioritized directive drawn from recommended_focus items in the given order (e.g. "Prioritize X first, then Y").`,
             },

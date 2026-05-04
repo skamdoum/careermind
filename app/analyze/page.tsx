@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import AppNavbar from "@/app/components/app-navbar";
+import AppShell from "@/app/components/app-shell";
 
 export default function AnalyzePage() {
   const supabase = createClient();
@@ -234,9 +234,7 @@ function getRecommendation(results: any[]) {
   return message;
 }
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
-  <AppNavbar />
-
+    <AppShell>
   <div className="space-y-2">
         <h1 className="text-3xl font-bold">Analyze Your Fit</h1>
         <p className="text-gray-600 max-w-2xl">
@@ -489,6 +487,6 @@ function getRecommendation(results: any[]) {
           </div>
         </div>
       )}
-    </main>
+    </AppShell>
   );
 }

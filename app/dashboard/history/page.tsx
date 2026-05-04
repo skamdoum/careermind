@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AppNavbar from "@/app/components/app-navbar";
 
 type PageProps = {
   searchParams: Promise<{ all?: string }>;
@@ -27,12 +26,12 @@ export default async function HistoryPage({ searchParams }: PageProps) {
 
   if (error) {
     return (
-      <main className="max-w-4xl mx-auto p-6 text-black">
+      <>
         <h1 className="text-2xl font-bold mb-4">History error</h1>
         <pre className="bg-gray-100 p-4 rounded whitespace-pre-wrap text-sm">
           {JSON.stringify(error, null, 2)}
         </pre>
-      </main>
+      </>
     );
   }
 
@@ -40,8 +39,7 @@ export default async function HistoryPage({ searchParams }: PageProps) {
   const visibleAnalyses = showAll ? analyses : analyses?.slice(0, 5);
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
-      <AppNavbar />
+    <>
       <h1 className="text-2xl font-bold">History</h1>
 
       {analyses?.length === 0 && (
@@ -92,6 +90,6 @@ export default async function HistoryPage({ searchParams }: PageProps) {
           Show all analyses ({totalAnalyses})
         </a>
       )}
-    </main>
+    </>
   );
 }

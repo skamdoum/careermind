@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AppNavbar from "@/app/components/app-navbar";
 
 const KEYWORD_GROUPS: { label: string; keywords: string[] }[] = [
   { label: "Strategy & roadmap", keywords: ["strategy", "roadmap"] },
@@ -142,8 +141,7 @@ export default async function StrategyV2Page() {
     : ["Run more analyses to identify positioning risks."];
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
-      <AppNavbar />
+    <>
       <h1 className="text-2xl font-bold">Strategy</h1>
 
       <section className="border rounded p-5 bg-white shadow-sm">
@@ -195,6 +193,6 @@ export default async function StrategyV2Page() {
           ))}
         </ul>
       </section>
-    </main>
+    </>
   );
 }

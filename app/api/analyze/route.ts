@@ -96,7 +96,7 @@ export async function POST(req: Request) {
         });
       }
     const response = await openai.responses.create({
-      model: "gpt-5.4",
+      model: "gpt-4.1",
       input: [
         {
           role: "system",
@@ -285,7 +285,7 @@ Return only valid JSON.
       .insert({
         user_id: user.id,
         analysis_type: "initial_onboarding",
-        model_name: "gpt-5.4",
+        model_name: "gpt-4.1",
         raw_json: parsed,
         summary: parsed.positioning_summary,
         status: "completed"

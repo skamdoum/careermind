@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
     for (const jd of jobDescriptions) {
       const response = await openai.responses.create({
-        model: "gpt-5.4",
+        model: "gpt-4.1",
         input: [
           {
             role: "system",

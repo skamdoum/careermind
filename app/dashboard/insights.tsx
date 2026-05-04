@@ -89,6 +89,7 @@ export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
   const [strategy, setStrategy] = useState<any>(null);
   const [progress, setProgress] = useState<any>(null);
+  const [narrative, setNarrative] = useState<any>(null);
   const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
 
   function dedupeStrings(items: string[] | undefined): string[] {
@@ -178,17 +179,20 @@ export default function Insights({ className = "" }: { className?: string }) {
 
   useEffect(() => {
     async function load() {
-      const [insightsRes, strategyRes, progressRes] = await Promise.all([
+      const [insightsRes, strategyRes, progressRes, narrativeRes] = await Promise.all([
         fetch("/api/insights"),
         fetch("/api/strategy"),
         fetch("/api/progress"),
+        fetch("/api/insights/narrative"),
       ]);
       const insightsData = await insightsRes.json();
       const strategyData = await strategyRes.json();
       const progressData = await progressRes.json();
+      const narrativeData = await narrativeRes.json();
       setInsights(insightsData.success ? insightsData.data : null);
       setStrategy(strategyData.success ? strategyData.data : null);
       setProgress(progressData.success ? progressData.data : null);
+      setNarrative(narrativeData.success ? narrativeData.data : null);
     }
 
     load();
@@ -218,7 +222,8 @@ export default function Insights({ className = "" }: { className?: string }) {
       <section className="border rounded p-5 bg-white shadow-sm mb-6">
         <h2 className="font-semibold text-lg mb-3">Career Summary</h2>
         <p className="text-gray-800 leading-7">
-          You are currently positioned as {withArticle(lookupArchetype(insights.top_signal.name))}, but you are not yet demonstrating {lookupMissing(insights.top_gap.name)}.
+          {narrative?.career_summary ||
+            `You are currently positioned as ${withArticle(lookupArchetype(insights.top_signal.name))}, but you are not yet demonstrating ${lookupMissing(insights.top_gap.name)}.`}
         </p>
       </section>
     )}
@@ -230,7 +235,7 @@ export default function Insights({ className = "" }: { className?: string }) {
         <div className="p-4 border rounded bg-blue-50">
           <div className="font-semibold mb-2">🧠 Coaching Insight</div>
           <div className="text-sm whitespace-pre-line">
-            {getCoachingMessage(insights)}
+            {narrative?.coaching_insight || getCoachingMessage(insights)}
           </div>
         </div>
 
@@ -285,11 +290,14 @@ export default function Insights({ className = "" }: { className?: string }) {
 
           {(() => {
             const items = dedupeStrings(insights.recommended_focus).slice(0, 2);
-            if (items.length === 0) return null;
-            const sentence =
-              items.length === 1
-                ? `Prioritize ${items[0]}.`
-                : `Prioritize ${items[0]} first, then ${items[1]}.`;
+            const ruleSentence =
+              items.length === 0
+                ? null
+                : items.length === 1
+                  ? `Prioritize ${items[0]}.`
+                  : `Prioritize ${items[0]} first, then ${items[1]}.`;
+            const sentence = narrative?.recommended_focus || ruleSentence;
+            if (!sentence) return null;
             return (
               <div className="p-4 border rounded bg-purple-50">
                 <div className="text-xs text-gray-500 mb-2">Recommended focus</div>

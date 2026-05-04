@@ -53,6 +53,38 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
       </div>
 
       <section className="border rounded p-5 bg-white shadow-sm">
+        <h2 className="font-semibold text-lg mb-3">Analysis Context</h2>
+        <div className="text-sm text-gray-700 space-y-1">
+          <div>
+            <span className="text-gray-500">Analysis:</span>{" "}
+            <span className="font-medium">
+              #{typeof analysis.id === "string" ? analysis.id.slice(0, 8) : analysis.id}
+            </span>
+          </div>
+          {analysis.created_at && (
+            <div>
+              <span className="text-gray-500">Created:</span>{" "}
+              <span className="font-medium">
+                {new Date(analysis.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          )}
+          <div>
+            <span className="text-gray-500">Resume:</span>{" "}
+            <span className="font-medium">
+              {analysis.resume_name || "Latest uploaded resume"}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-500">Target job:</span>{" "}
+            <span className="font-medium">
+              {analysis.job_title || data?.company_name || "Pasted job description"}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="border rounded p-5 bg-white shadow-sm">
     <h2 className="font-semibold text-lg mb-2">Verdict</h2>
 
     <div className="flex items-center justify-between">

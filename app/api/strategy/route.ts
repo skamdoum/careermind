@@ -11,16 +11,33 @@ const FILLER_WORDS = new Set([
   "in", "is", "it", "its", "no", "not", "of", "on", "or", "the", "to", "with",
 ]);
 
-const TASK_TEMPLATES: Record<string, string[]> = {
+type StrategyTask = {
+  text: string;
+  priority: "P1" | "P2" | "P3";
+  impact: "High" | "Medium" | "Low";
+  effort: "Low" | "Medium" | "High";
+};
+
+const PRIORITY_RANK: Record<StrategyTask["priority"], number> = {
+  P1: 1,
+  P2: 2,
+  P3: 3,
+};
+
+function byPriority(a: StrategyTask, b: StrategyTask): number {
+  return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+}
+
+const TASK_TEMPLATES: Record<string, StrategyTask[]> = {
   "Strategy & roadmap": [
-    "Draft a 1-page roadmap with 3 strategic bets, trade-offs, and 6-month milestones",
-    "Write a 500-word strategy memo linking your team's OKRs to a 12-month vision",
-    "Map your 5 most-active initiatives to roadmap themes; flag unfunded gaps",
+    { text: "Draft a 1-page roadmap with 3 strategic bets, trade-offs, and 6-month milestones", priority: "P1", impact: "High", effort: "Medium" },
+    { text: "Write a 500-word strategy memo linking your team's OKRs to a 12-month vision", priority: "P2", impact: "High", effort: "Medium" },
+    { text: "Map your 5 most-active initiatives to roadmap themes; flag unfunded gaps", priority: "P3", impact: "Medium", effort: "Low" },
   ],
   "AI / ML": [
-    "Document 1 AI/ML project with a measurable revenue or efficiency outcome",
-    "Draft a 1-page AI use case for your product domain, including the success metric",
-    "Add 2 resume bullets quantifying your AI/ML scope and shipped impact",
+    { text: "Document 1 AI/ML project with a measurable revenue or efficiency outcome", priority: "P1", impact: "High", effort: "Medium" },
+    { text: "Draft a 1-page AI use case for your product domain, including the success metric", priority: "P2", impact: "Medium", effort: "Low" },
+    { text: "Add 2 resume bullets quantifying your AI/ML scope and shipped impact", priority: "P3", impact: "Medium", effort: "Low" },
   ],
 };
 
@@ -47,13 +64,13 @@ function focusLabelFor(name: string): string {
   return simplifyFallback(name);
 }
 
-function actionsFor(label: string): string[] {
-  if (TASK_TEMPLATES[label]) return TASK_TEMPLATES[label];
-  return [
-    `Write a 200-word framing statement of your angle on ${label}`,
-    `Pick 1 past project where you drove ${label}; write 3 bullets with metrics`,
-    `Add 1 resume line quantifying impact specifically tied to ${label}`,
+function actionsFor(label: string): StrategyTask[] {
+  const tasks: StrategyTask[] = TASK_TEMPLATES[label] ?? [
+    { text: `Write a 200-word framing statement of your angle on ${label}`, priority: "P1", impact: "High", effort: "Low" },
+    { text: `Pick 1 past project where you drove ${label}; write 3 bullets with metrics`, priority: "P2", impact: "High", effort: "Medium" },
+    { text: `Add 1 resume line quantifying impact specifically tied to ${label}`, priority: "P3", impact: "Medium", effort: "Low" },
   ];
+  return [...tasks].sort(byPriority);
 }
 
 export async function GET() {

@@ -2,11 +2,35 @@
 
 import { useEffect, useState } from "react";
 
+type TaskStatus = "new" | "in_progress" | "done";
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  new: "New",
+  in_progress: "In progress",
+  done: "Done",
+};
+const STATUS_ORDER: TaskStatus[] = ["new", "in_progress", "done"];
+
+const PRIORITY_BADGE_CLASS: Record<string, string> = {
+  P1: "bg-red-100 text-red-800",
+  P2: "bg-yellow-100 text-yellow-800",
+  P3: "bg-gray-100 text-gray-700",
+};
+const IMPACT_BADGE_CLASS: Record<string, string> = {
+  High: "bg-green-100 text-green-800",
+  Medium: "bg-yellow-100 text-yellow-800",
+  Low: "bg-gray-100 text-gray-700",
+};
+const EFFORT_BADGE_CLASS: Record<string, string> = {
+  Low: "bg-green-100 text-green-800",
+  Medium: "bg-yellow-100 text-yellow-800",
+  High: "bg-red-100 text-red-800",
+};
+
 export default function Insights({ className = "" }: { className?: string }) {
   const [insights, setInsights] = useState<any>(null);
   const [strategy, setStrategy] = useState<any>(null);
   const [progress, setProgress] = useState<any>(null);
-  const [checkedTasks, setCheckedTasks] = useState<Record<string, boolean>>({});
+  const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
 
   function dedupeStrings(items: string[] | undefined): string[] {
     if (!items) return [];
@@ -70,19 +94,20 @@ export default function Insights({ className = "" }: { className?: string }) {
 
   function renderStrategyProgress() {
     let total = 0;
-    let completed = 0;
+    const counts: Record<TaskStatus, number> = { new: 0, in_progress: 0, done: 0 };
     strategy?.actions?.forEach((a: any, i: number) => {
       a.tasks?.forEach((_: string, j: number) => {
         total++;
-        if (checkedTasks[`${i}:${j}`]) completed++;
+        const status = taskStatuses[`${i}:${j}`] || "new";
+        counts[status]++;
       });
     });
-    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const percent = total > 0 ? Math.round((counts.done / total) * 100) : 0;
     return (
       <div className="border rounded p-4 bg-gray-50 mb-4 space-y-2">
         <h3 className="font-semibold">Progress</h3>
         <div className="text-sm text-gray-700">
-          {completed} / {total} tasks complete
+          Total: {total} | New: {counts.new} | In progress: {counts.in_progress} | Done: {counts.done}
         </div>
         <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
           <div className="bg-black h-3" style={{ width: `${percent}%` }} />
@@ -241,7 +266,7 @@ export default function Insights({ className = "" }: { className?: string }) {
           This is your core improvement plan across roles. Focus here first.
         </p>
         <p className="text-sm text-gray-600 mb-4">
-          Your top focus areas with concrete next steps. Check off tasks as you complete them.
+          Your top focus areas with concrete next steps. Update each task's status as you make progress.
         </p>
         {renderStrategyProgress()}
         <div className="space-y-4">
@@ -261,22 +286,61 @@ export default function Insights({ className = "" }: { className?: string }) {
                 )}
               </div>
               <ul className="text-sm space-y-2">
-                {action.tasks.map((task: string, j: number) => {
+                {action.tasks.map((task: any, j: number) => {
                   const key = `${i}:${j}`;
-                  const checked = !!checkedTasks[key];
+                  const status = taskStatuses[key] || "new";
                   return (
-                    <li key={j} className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() =>
-                          setCheckedTasks((prev) => ({ ...prev, [key]: !prev[key] }))
-                        }
-                        className="mt-1"
-                      />
-                      <span className={checked ? "line-through text-gray-500" : ""}>
-                        {task}
-                      </span>
+                    <li key={j} className="space-y-2 border rounded p-3 bg-white">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={status === "done" ? "line-through text-gray-500" : ""}>
+                          {task.text}
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
+                            status === "done"
+                              ? "bg-green-100 text-green-800"
+                              : status === "in_progress"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {STATUS_LABELS[status]}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {task.priority && (
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${PRIORITY_BADGE_CLASS[task.priority] || "bg-gray-100 text-gray-700"}`}>
+                            {task.priority}
+                          </span>
+                        )}
+                        {task.impact && (
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${IMPACT_BADGE_CLASS[task.impact] || "bg-gray-100 text-gray-700"}`}>
+                            {task.impact} impact
+                          </span>
+                        )}
+                        {task.effort && (
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${EFFORT_BADGE_CLASS[task.effort] || "bg-gray-100 text-gray-700"}`}>
+                            {task.effort} effort
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {STATUS_ORDER.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() =>
+                              setTaskStatuses((prev) => ({ ...prev, [key]: s }))
+                            }
+                            className={`text-xs px-2 py-1 rounded border ${
+                              status === s
+                                ? "bg-black text-white border-black"
+                                : "bg-white text-gray-700 border-gray-300"
+                            }`}
+                          >
+                            {STATUS_LABELS[s]}
+                          </button>
+                        ))}
+                      </div>
                     </li>
                   );
                 })}

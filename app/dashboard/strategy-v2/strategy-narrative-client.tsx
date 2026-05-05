@@ -23,14 +23,23 @@ type AiNarrative = {
 
 export default function StrategyNarrativeClient({ fallback }: { fallback: Fallback }) {
   const [ai, setAi] = useState<AiNarrative | null>(null);
-  const [narrativeLoading, setNarrativeLoading] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [narrativeResolved, setNarrativeResolved] = useState(false);
 
   useEffect(() => {
+    const skeletonTimer = setTimeout(() => setShowSkeleton(true), 300);
+
     fetch("/api/strategy/narrative")
       .then((r) => r.json())
       .then((d) => { if (d.success && d.data) setAi(d.data); })
       .catch(() => {})
-      .finally(() => setNarrativeLoading(false));
+      .finally(() => {
+        clearTimeout(skeletonTimer);
+        setShowSkeleton(false);
+        setNarrativeResolved(true);
+      });
+
+    return () => clearTimeout(skeletonTimer);
   }, []);
 
   const positioning  = ai?.target_positioning          || fallback.positioning;
@@ -47,11 +56,13 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
 
       <section className="border rounded p-5 bg-white shadow-sm">
         <h2 className="font-semibold text-lg mb-3">Target Positioning</h2>
-        {narrativeLoading ? (
+        {showSkeleton ? (
           <div className="space-y-2">
             <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6" />
           </div>
+        ) : !narrativeResolved ? (
+          <div className="min-h-[3rem]" />
         ) : (
           <>
             <p className="text-gray-800 leading-7">{positioning}</p>
@@ -62,7 +73,7 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
 
       <section className="border rounded p-5 bg-white shadow-sm">
         <h2 className="font-semibold text-lg mb-3">Role Targeting Guidance</h2>
-        {narrativeLoading ? (
+        {showSkeleton ? (
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="h-3 bg-gray-200 rounded animate-pulse w-1/4" />
@@ -77,6 +88,8 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
               <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
             </div>
           </div>
+        ) : !narrativeResolved ? (
+          <div className="min-h-[8rem]" />
         ) : (
           <div className="space-y-4">
             <div>
@@ -97,12 +110,14 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
 
       <section className="border rounded p-5 bg-white shadow-sm">
         <h2 className="font-semibold text-lg mb-3">Positioning Tradeoffs</h2>
-        {narrativeLoading ? (
+        {showSkeleton ? (
           <div className="space-y-2">
             <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
           </div>
+        ) : !narrativeResolved ? (
+          <div className="min-h-[4rem]" />
         ) : (
           <ul className="text-sm space-y-1 list-disc list-inside">
             {tradeoffs.map((b, i) => <li key={i}>{b}</li>)}
@@ -112,12 +127,14 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
 
       <section className="border rounded p-5 bg-blue-50 shadow-sm">
         <h2 className="font-semibold text-lg mb-3">Narrative to Tell</h2>
-        {narrativeLoading ? (
+        {showSkeleton ? (
           <div className="space-y-2">
             <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
           </div>
+        ) : !narrativeResolved ? (
+          <div className="min-h-[4rem]" />
         ) : (
           <p className="text-gray-800 leading-7 italic">{narrative}</p>
         )}
@@ -125,11 +142,13 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
 
       <section className="border rounded p-5 bg-white shadow-sm">
         <h2 className="font-semibold text-lg mb-3">Risks</h2>
-        {narrativeLoading ? (
+        {showSkeleton ? (
           <div className="space-y-2">
             <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6" />
           </div>
+        ) : !narrativeResolved ? (
+          <div className="min-h-[3rem]" />
         ) : (
           <ul className="text-sm space-y-1 list-disc list-inside">
             {risks.map((b, i) => <li key={i}>{b}</li>)}

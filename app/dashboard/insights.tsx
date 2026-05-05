@@ -98,7 +98,8 @@ export default function Insights({
   const [strategy, setStrategy] = useState<any>(null);
   const [progress, setProgress] = useState<any>(null);
   const [narrative, setNarrative] = useState<any>(null);
-  const [narrativeLoading, setNarrativeLoading] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [narrativeResolved, setNarrativeResolved] = useState(false);
   const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
 
   function dedupeStrings(items: string[] | undefined): string[] {
@@ -203,11 +204,19 @@ export default function Insights({
 
     load();
 
+    const skeletonTimer = setTimeout(() => setShowSkeleton(true), 300);
+
     fetch("/api/insights/narrative")
       .then((r) => r.json())
       .then((d) => { if (d.success) setNarrative(d.data); })
       .catch(() => {})
-      .finally(() => setNarrativeLoading(false));
+      .finally(() => {
+        clearTimeout(skeletonTimer);
+        setShowSkeleton(false);
+        setNarrativeResolved(true);
+      });
+
+    return () => clearTimeout(skeletonTimer);
   }, []);
 
   function getCoachingMessage(insights: any) {
@@ -236,11 +245,13 @@ export default function Insights({
     {showOverview && insights?.top_signal && insights?.top_gap && (
       <section className="border rounded p-5 bg-white shadow-sm mb-6">
         <h2 className="font-semibold text-lg mb-3">Career Summary</h2>
-        {narrativeLoading ? (
+        {showSkeleton ? (
           <div className="space-y-2">
             <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
             <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
           </div>
+        ) : !narrativeResolved ? (
+          <div className="min-h-[3rem]" />
         ) : (
           <p className="text-gray-800 leading-7">
             {narrative?.career_summary ||
@@ -257,12 +268,14 @@ export default function Insights({
       <div className="space-y-6">
         <div className="p-4 border rounded bg-blue-50">
           <div className="font-semibold mb-2">🧠 Coaching Insight</div>
-          {narrativeLoading ? (
+          {showSkeleton ? (
             <div className="space-y-2">
               <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
               <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6" />
               <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
             </div>
+          ) : !narrativeResolved ? (
+            <div className="min-h-[4rem]" />
           ) : (
             <div className="text-sm whitespace-pre-line">
               {narrative?.coaching_insight || getCoachingMessage(insights)}
@@ -327,11 +340,19 @@ export default function Insights({
                 : items.length === 1
                   ? `Prioritize ${items[0]}.`
                   : `Prioritize ${items[0]} first, then ${items[1]}.`;
-            if (narrativeLoading) {
+            if (showSkeleton) {
               return (
                 <div className="p-4 border rounded bg-purple-50">
                   <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
                   <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
+                </div>
+              );
+            }
+            if (!narrativeResolved) {
+              return (
+                <div className="p-4 border rounded bg-purple-50">
+                  <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
+                  <div className="min-h-[1.5rem]" />
                 </div>
               );
             }

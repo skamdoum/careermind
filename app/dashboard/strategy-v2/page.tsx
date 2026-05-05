@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import StrategyNarrativeClient from "./strategy-narrative-client";
 
 const KEYWORD_GROUPS: { label: string; keywords: string[] }[] = [
   { label: "Strategy & roadmap", keywords: ["strategy", "roadmap"] },
@@ -141,58 +142,8 @@ export default async function StrategyV2Page() {
     : ["Run more analyses to identify positioning risks."];
 
   return (
-    <>
-      <h1 className="text-2xl font-bold">Strategy</h1>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Target Positioning</h2>
-        <p className="text-gray-800 leading-7">{positioning}</p>
-      </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Role Targeting Guidance</h2>
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Where to focus</h3>
-            <ul className="text-sm space-y-1 list-disc list-inside">
-              {whereToFocus.map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3 className="font-medium text-sm text-gray-700 mb-2">Where to avoid</h3>
-            <ul className="text-sm space-y-1 list-disc list-inside">
-              {whereToAvoid.map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Positioning Tradeoffs</h2>
-        <ul className="text-sm space-y-1 list-disc list-inside">
-          {tradeoffs.map((b, i) => (
-            <li key={i}>{b}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="border rounded p-5 bg-blue-50 shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Narrative to Tell</h2>
-        <p className="text-gray-800 leading-7 italic">{narrative}</p>
-      </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Risks</h2>
-        <ul className="text-sm space-y-1 list-disc list-inside">
-          {risks.map((b, i) => (
-            <li key={i}>{b}</li>
-          ))}
-        </ul>
-      </section>
-    </>
+    <StrategyNarrativeClient
+      fallback={{ positioning, whereToFocus, whereToAvoid, tradeoffs, narrative, risks }}
+    />
   );
 }

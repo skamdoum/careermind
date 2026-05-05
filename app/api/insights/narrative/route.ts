@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
+import { createHash } from "crypto";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -123,6 +124,29 @@ export async function GET() {
       total_analyses: analyses.length,
     };
 
+    const source_hash = createHash("sha256")
+      .update(JSON.stringify(inputPayload))
+      .digest("hex");
+
+    const { data: cachedRow } = await supabase
+      .from("insight_narratives")
+      .select("career_summary, coaching_insight, recommended_focus")
+      .eq("user_id", user.id)
+      .eq("source_hash", source_hash)
+      .maybeSingle();
+
+    if (cachedRow) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          career_summary: cachedRow.career_summary,
+          coaching_insight: cachedRow.coaching_insight,
+          recommended_focus: cachedRow.recommended_focus,
+        },
+        cached: true,
+      });
+    }
+
     const response = await openai.responses.create({
       model: "gpt-4.1",
       input: [
@@ -188,6 +212,18 @@ Hard rules:
 
     const parsed = JSON.parse(response.output_text);
 
+    try {
+      await supabase.from("insight_narratives").insert({
+        user_id: user.id,
+        source_hash,
+        career_summary: parsed.career_summary,
+        coaching_insight: parsed.coaching_insight,
+        recommended_focus: parsed.recommended_focus,
+      });
+    } catch (insertErr) {
+      console.error("INSIGHTS NARRATIVE CACHE INSERT ERROR:", insertErr);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -195,6 +231,7 @@ Hard rules:
         coaching_insight: parsed.coaching_insight,
         recommended_focus: parsed.recommended_focus,
       },
+      cached: false,
     });
   } catch (err) {
     console.error("INSIGHTS NARRATIVE ERROR:", err);

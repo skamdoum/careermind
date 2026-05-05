@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
+import { createHash } from "crypto";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -127,6 +128,33 @@ export async function GET() {
       total_analyses: analyses.length,
     };
 
+    const source_hash = createHash("sha256")
+      .update(JSON.stringify(inputPayload))
+      .digest("hex");
+
+    const { data: cachedRow } = await supabase
+      .from("strategy_narratives")
+      .select("target_positioning, strategic_direction, where_to_focus, where_to_avoid, positioning_tradeoffs, narrative_to_tell, risks")
+      .eq("user_id", user.id)
+      .eq("source_hash", source_hash)
+      .maybeSingle();
+
+    if (cachedRow) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          target_positioning: cachedRow.target_positioning,
+          strategic_direction: cachedRow.strategic_direction,
+          where_to_focus: cachedRow.where_to_focus,
+          where_to_avoid: cachedRow.where_to_avoid,
+          positioning_tradeoffs: cachedRow.positioning_tradeoffs,
+          narrative_to_tell: cachedRow.narrative_to_tell,
+          risks: cachedRow.risks,
+        },
+        cached: true,
+      });
+    }
+
     const response = await openai.responses.create({
       model: "gpt-4.1",
       input: [
@@ -222,6 +250,22 @@ Field rules:
       return NextResponse.json({ success: true, data: EMPTY_STRATEGY_NARRATIVE });
     }
 
+    try {
+      await supabase.from("strategy_narratives").insert({
+        user_id: user.id,
+        source_hash,
+        target_positioning: parsed.target_positioning,
+        strategic_direction: parsed.strategic_direction,
+        where_to_focus: parsed.where_to_focus,
+        where_to_avoid: parsed.where_to_avoid,
+        positioning_tradeoffs: parsed.positioning_tradeoffs,
+        narrative_to_tell: parsed.narrative_to_tell,
+        risks: parsed.risks,
+      });
+    } catch (insertErr) {
+      console.error("STRATEGY NARRATIVE CACHE INSERT ERROR:", insertErr);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -233,6 +277,7 @@ Field rules:
         narrative_to_tell: parsed.narrative_to_tell,
         risks: parsed.risks,
       },
+      cached: false,
     });
   } catch (err) {
     console.error("STRATEGY NARRATIVE ERROR:", err);

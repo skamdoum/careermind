@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import TaskList from "./task-list";
-import AppNavbar from "@/app/components/app-navbar";
 
 export const dynamic = "force-dynamic";
 
@@ -40,34 +38,48 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     .limit(1)
     .single();
 
-  const { data: tasks } = plan
-    ? await supabase
-        .from("plan_tasks")
-        .select("*")
-        .eq("plan_id", plan.id)
-        .order("priority", { ascending: true })
-    : { data: [] };
-
   const data = analysis.raw_json;
-  const totalTasks = tasks?.length || 0;
-  const doneTasks = tasks?.filter((t: any) => t.status === "done").length || 0;
-  const inProgressTasks =
-    tasks?.filter((t: any) => t.status === "in_progress").length || 0;
-  const notStartedTasks =
-    tasks?.filter((t: any) => t.status === "not_started").length || 0;
-  const completionPercent =
-    totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6 text-black">
-      <AppNavbar />
-      
+    <>
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Analysis</h1>
         <p className="text-sm text-gray-500">
           Review your fit, biggest gaps, and the highest-leverage next steps.
         </p>
       </div>
+
+      <section className="border rounded p-5 bg-white shadow-sm">
+        <h2 className="font-semibold text-lg mb-3">Analysis Context</h2>
+        <div className="text-sm text-gray-700 space-y-1">
+          <div>
+            <span className="text-gray-500">Analysis:</span>{" "}
+            <span className="font-medium">
+              #{typeof analysis.id === "string" ? analysis.id.slice(0, 8) : analysis.id}
+            </span>
+          </div>
+          {analysis.created_at && (
+            <div>
+              <span className="text-gray-500">Created:</span>{" "}
+              <span className="font-medium">
+                {new Date(analysis.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          )}
+          <div>
+            <span className="text-gray-500">Resume:</span>{" "}
+            <span className="font-medium">
+              {analysis.resume_name || "Latest uploaded resume"}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-500">Target job:</span>{" "}
+            <span className="font-medium">
+              {analysis.job_title || data?.company_name || "Pasted job description"}
+            </span>
+          </div>
+        </div>
+      </section>
 
       <section className="border rounded p-5 bg-white shadow-sm">
     <h2 className="font-semibold text-lg mb-2">Verdict</h2>
@@ -99,7 +111,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
       </section>
 
       <section className="border rounded p-5 bg-green-50 shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Next Best Action</h2>
+        <h2 className="font-semibold text-lg mb-3">Job-specific guidance</h2>
         <p className="text-gray-900 font-medium leading-7">
           {plan?.next_best_action || data?.plan?.next_best_action}
         </p>
@@ -170,29 +182,6 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-2">Plan Execution</h2>
-
-        <div className="border rounded p-4 bg-gray-50 mb-4 space-y-2">
-          <h3 className="font-semibold">Progress</h3>
-
-          <div className="text-sm text-gray-700">
-            Total tasks: {totalTasks} | Done: {doneTasks} | In progress:{" "}
-            {inProgressTasks} | Not started: {notStartedTasks}
-          </div>
-
-          <div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
-            <div
-              className="bg-black h-3"
-              style={{ width: `${completionPercent}%` }}
-            />
-          </div>
-
-          <div className="text-sm font-medium">{completionPercent}% complete</div>
-        </div>
-
-        <TaskList tasks={tasks || []} />
-      </section>
-    </main>
+    </>
   );
 }

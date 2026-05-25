@@ -10,7 +10,7 @@ export async function POST() {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: existing } = await supabase
@@ -33,7 +33,7 @@ export async function POST() {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "Failed to ensure profile" },
+      { success: false, error: error?.message || "Failed to ensure profile" },
       { status: 500 }
     );
   }

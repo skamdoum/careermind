@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const { resumeText, latestResume, jobDescriptions } = await req.json();
 
     if ((!resumeText && !latestResume?.file_path) || !jobDescriptions || jobDescriptions.length === 0) {
-      return NextResponse.json({ error: "Missing input" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Missing input" }, { status: 400 });
     }
 
     let resumeContentParts: any[] = [];
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
     for (const jd of jobDescriptions) {
       const response = await openai.responses.create({
-        model: "gpt-5.4",
+        model: "gpt-4.1",
         input: [
           {
             role: "system",
@@ -94,9 +94,9 @@ Be direct, specific, and decisive.`
 
     results.sort((a, b) => b.score - a.score);
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ success: true, data: results });
   } catch (err) {
     console.error("COMPARE API ERROR:", err);
-    return NextResponse.json({ error: "Compare failed" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Compare failed" }, { status: 500 });
   }
 }

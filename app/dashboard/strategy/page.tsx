@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Insights from "./insights";
+import Insights from "../insights";
 
-export default async function DashboardPage() {
+export default async function StrategyPage() {
   const supabase = await createClient();
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -15,8 +14,8 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold">Overview</h1>
-      <Insights mode="overview" />
+      <h1 className="text-2xl font-bold">Action Plan</h1>
+      <Insights mode="strategy" />
     </>
   );
 }

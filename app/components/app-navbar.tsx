@@ -50,6 +50,10 @@ export default function AppNavbar() {
             Overview
           </Link>
 
+          <Link href="/dashboard/goals" className={linkClass("/dashboard/goals")}>
+            Goals
+          </Link>
+
           <Link href="/dashboard/strategy-v2" className={linkClass("/dashboard/strategy-v2")}>
             Strategy
           </Link>

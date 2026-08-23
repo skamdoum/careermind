@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +20,14 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     redirect("/login");
   }
 
+  const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
   const { data: analysis, error } = await supabase
     .from("analyses")
     .select("*")
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfile.id)
     .single();
 
   if (error || !analysis) {

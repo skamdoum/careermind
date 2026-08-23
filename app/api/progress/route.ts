@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -13,10 +14,13 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
     const { data: analyses } = await supabase
       .from("analyses")
       .select("raw_json")
       .eq("user_id", user.id)
+      .eq("career_profile_id", activeProfile.id)
       .order("created_at", { ascending: false })
       .limit(2);
 

@@ -15,7 +15,7 @@ export async function POST() {
 
     const { data: existing } = await supabase
       .from("profiles")
-      .select("id")
+      .select("id, active_career_profile_id")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -28,6 +28,39 @@ export async function POST() {
       if (error) {
         throw error;
       }
+    }
+
+    const { data: cpExisting } = await supabase
+      .from("career_profiles")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("is_default", true)
+      .maybeSingle();
+
+    let defaultProfileId = cpExisting?.id ?? null;
+
+    if (!defaultProfileId) {
+      const { data: created, error: createErr } = await supabase
+        .from("career_profiles")
+        .insert({
+          user_id: user.id,
+          name: "My career direction",
+          is_default: true,
+        })
+        .select("id")
+        .single();
+
+      if (createErr) {
+        throw createErr;
+      }
+      defaultProfileId = created.id;
+    }
+
+    if (defaultProfileId && !existing?.active_career_profile_id) {
+      await supabase
+        .from("profiles")
+        .update({ active_career_profile_id: defaultProfileId })
+        .eq("id", user.id);
     }
 
     return NextResponse.json({ success: true });

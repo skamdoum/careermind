@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -17,10 +18,13 @@ export async function GET() {
       );
     }
 
+    const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
     const { data, error } = await supabase
       .from("resumes")
       .select("*")
       .eq("user_id", user.id)
+      .eq("career_profile_id", activeProfile.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

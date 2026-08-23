@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 import { createHash } from "crypto";
 
@@ -60,10 +61,13 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
     const { data: analyses } = await supabase
       .from("analyses")
       .select("raw_json")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("career_profile_id", activeProfile.id);
 
     if (!analyses || analyses.length === 0) {
       return NextResponse.json({ success: true, data: EMPTY_STRATEGY_NARRATIVE });

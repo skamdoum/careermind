@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 import StrategyNarrativeClient from "./strategy-narrative-client";
 
@@ -43,10 +44,13 @@ export default async function StrategyV2Page() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
   const { data: analyses } = await supabase
     .from("analyses")
     .select("raw_json")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfile.id);
 
   const gapCounts: Record<string, number> = {};
   const signalCounts: Record<string, number> = {};

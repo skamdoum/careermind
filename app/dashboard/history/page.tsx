@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
@@ -18,10 +19,13 @@ export default async function HistoryPage({ searchParams }: PageProps) {
     redirect("/login");
   }
 
+  const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
   const { data: analyses, error } = await supabase
     .from("analyses")
     .select("id, summary, created_at, raw_json")
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfile.id)
     .order("created_at", { ascending: false });
 
   if (error) {

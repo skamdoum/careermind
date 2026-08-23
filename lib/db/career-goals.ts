@@ -1,8 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireUserAndActiveProfile } from "@/lib/db/career-profiles";
 
 export type CareerGoal = {
   id: string;
   user_id: string;
+  career_profile_id: string | null;
   title: string;
   target_level: string | null;
   target_function: string | null;
@@ -25,29 +26,17 @@ export type UpdateCareerGoalInput = {
   target_function?: string | null;
 };
 
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error(error?.message || "Unauthorized");
-  }
-
-  return { supabase, user };
-}
-
 export async function createCareerGoal(
   input: CreateCareerGoalInput
 ): Promise<CareerGoal> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data, error } = await supabase
     .from("career_goals")
     .insert({
       user_id: user.id,
+      career_profile_id: activeProfileId,
       title: input.title,
       target_level: input.target_level ?? null,
       target_function: input.target_function ?? null,
@@ -64,12 +53,14 @@ export async function createCareerGoal(
 }
 
 export async function getCareerGoalsByUser(): Promise<CareerGoal[]> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data, error } = await supabase
     .from("career_goals")
     .select("*")
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -82,13 +73,15 @@ export async function getCareerGoalsByUser(): Promise<CareerGoal[]> {
 export async function getCareerGoalById(
   id: string
 ): Promise<CareerGoal | null> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data, error } = await supabase
     .from("career_goals")
     .select("*")
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .maybeSingle();
 
   if (error) {
@@ -102,7 +95,8 @@ export async function updateCareerGoal(
   id: string,
   input: UpdateCareerGoalInput
 ): Promise<CareerGoal> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const payload: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -116,6 +110,7 @@ export async function updateCareerGoal(
     .update(payload)
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .select()
     .maybeSingle();
 
@@ -131,13 +126,15 @@ export async function updateCareerGoal(
 }
 
 export async function deleteCareerGoal(id: string): Promise<void> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data: existing, error: lookupError } = await supabase
     .from("career_goals")
     .select("id")
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .maybeSingle();
 
   if (lookupError) {
@@ -164,7 +161,8 @@ export async function deleteCareerGoal(id: string): Promise<void> {
     .from("career_goals")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId);
 
   if (goalError) {
     throw new Error(`Failed to delete career goal: ${goalError.message}`);

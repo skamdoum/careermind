@@ -1,9 +1,11 @@
+import { requireUserAndActiveProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 export type TargetJob = {
   id: string;
   user_id: string;
   career_goal_id: string | null;
+  career_profile_id: string | null;
   company_name: string | null;
   role_title: string | null;
   source_url: string | null;
@@ -26,30 +28,18 @@ export type UpdateTargetJobInput = {
   source_url?: string | null;
 };
 
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error(error?.message || "Unauthorized");
-  }
-
-  return { supabase, user };
-}
-
 async function assertGoalOwnedByUser(
   supabase: Awaited<ReturnType<typeof createClient>>,
   goalId: string,
-  userId: string
+  userId: string,
+  activeProfileId: string
 ): Promise<void> {
   const { data, error } = await supabase
     .from("career_goals")
     .select("id")
     .eq("id", goalId)
     .eq("user_id", userId)
+    .eq("career_profile_id", activeProfileId)
     .maybeSingle();
 
   if (error) {
@@ -65,15 +55,17 @@ export async function createTargetJob(
   careerGoalId: string,
   input: CreateTargetJobInput
 ): Promise<TargetJob> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
-  await assertGoalOwnedByUser(supabase, careerGoalId, user.id);
+  await assertGoalOwnedByUser(supabase, careerGoalId, user.id, activeProfileId);
 
   const { data, error } = await supabase
     .from("job_descriptions")
     .insert({
       user_id: user.id,
       career_goal_id: careerGoalId,
+      career_profile_id: activeProfileId,
       jd_text: input.jd_text,
       company_name: input.company_name ?? null,
       role_title: input.role_title ?? null,
@@ -92,15 +84,17 @@ export async function createTargetJob(
 export async function getTargetJobsByGoal(
   careerGoalId: string
 ): Promise<TargetJob[]> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
-  await assertGoalOwnedByUser(supabase, careerGoalId, user.id);
+  await assertGoalOwnedByUser(supabase, careerGoalId, user.id, activeProfileId);
 
   const { data, error } = await supabase
     .from("job_descriptions")
     .select("*")
     .eq("career_goal_id", careerGoalId)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -120,13 +114,15 @@ export type TargetJobAnalysisSummary = {
 export async function getAnalysesForTargetJob(
   jobId: string
 ): Promise<TargetJobAnalysisSummary[]> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data, error } = await supabase
     .from("analyses")
     .select("id, summary, created_at, raw_json")
     .eq("job_description_id", jobId)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -139,13 +135,15 @@ export async function getAnalysesForTargetJob(
 export async function getTargetJobById(
   id: string
 ): Promise<TargetJob | null> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data, error } = await supabase
     .from("job_descriptions")
     .select("*")
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .maybeSingle();
 
   if (error) {
@@ -159,7 +157,8 @@ export async function updateTargetJob(
   id: string,
   input: UpdateTargetJobInput
 ): Promise<TargetJob> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const payload: Record<string, unknown> = {};
   if (input.jd_text !== undefined) payload.jd_text = input.jd_text;
@@ -172,6 +171,7 @@ export async function updateTargetJob(
     .update(payload)
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .select()
     .maybeSingle();
 
@@ -187,13 +187,15 @@ export async function updateTargetJob(
 }
 
 export async function deleteTargetJob(id: string): Promise<void> {
-  const { supabase, user } = await requireUser();
+  const { supabase, user, activeProfileId } =
+    await requireUserAndActiveProfile();
 
   const { data, error } = await supabase
     .from("job_descriptions")
     .delete()
     .eq("id", id)
     .eq("user_id", user.id)
+    .eq("career_profile_id", activeProfileId)
     .select("id")
     .maybeSingle();
 

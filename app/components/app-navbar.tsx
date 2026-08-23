@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
+import ProfileSwitcher from "@/app/components/profile-switcher";
 
 export default function AppNavbar() {
   const pathname = usePathname();
@@ -75,11 +76,7 @@ export default function AppNavbar() {
       <div className="border-t border-gray-200" />
 
       <div className="px-4 py-2 flex items-center justify-end gap-3">
-        {userEmail && (
-          <div className="text-sm text-gray-600">
-            Signed in as <span className="font-medium text-black">{userEmail}</span>
-          </div>
-        )}
+        {userEmail && <ProfileSwitcher userEmail={userEmail} />}
 
         <button
           onClick={handleSignOut}

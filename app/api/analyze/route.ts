@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 const openai = new OpenAI({
@@ -22,6 +23,12 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
+
+    // Resolve the active career profile once, up front, and keep it for the
+    // entire request. Never re-read mid-flight so a profile switch made during
+    // the analysis does not split ownership across two profiles.
+    const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+    const activeProfileId = activeProfile.id;
 
     const body = await req.json();
     const {
@@ -58,6 +65,7 @@ export async function POST(req: Request) {
         .select("id, target_level, target_function")
         .eq("id", career_goal_id)
         .eq("user_id", user.id)
+        .eq("career_profile_id", activeProfileId)
         .maybeSingle();
 
       if (goalError) {
@@ -79,6 +87,7 @@ export async function POST(req: Request) {
         .select("id, jd_text, career_goal_id, role_title")
         .eq("id", job_description_id)
         .eq("user_id", user.id)
+        .eq("career_profile_id", activeProfileId)
         .maybeSingle();
 
       if (jobError) {
@@ -358,6 +367,7 @@ Return only valid JSON.
         raw_json: parsed,
         summary: parsed.positioning_summary,
         status: "completed",
+        career_profile_id: activeProfileId,
         career_goal_id: career_goal_id ?? null,
         job_description_id: job_description_id ?? null,
         resume_id: latestResume?.id ?? null,

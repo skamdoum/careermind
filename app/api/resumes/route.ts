@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
@@ -17,6 +18,8 @@ export async function POST(req: Request) {
       );
     }
 
+    const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+
     const body = await req.json();
     const { filePath, fileName, mimeType } = body;
 
@@ -31,6 +34,7 @@ export async function POST(req: Request) {
       .from("resumes")
       .insert({
         user_id: user.id,
+        career_profile_id: activeProfile.id,
         file_path: filePath,
         file_name: fileName,
         mime_type: mimeType || null,

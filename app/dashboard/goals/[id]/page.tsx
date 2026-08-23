@@ -9,6 +9,7 @@ type CareerGoal = {
   title: string;
   target_level: string | null;
   target_function: string | null;
+  description: string | null;
   status: string;
   primary_resume_id: string | null;
   created_at: string;
@@ -331,6 +332,17 @@ export default function GoalDetailPage({ params }: PageProps) {
                 <span className="font-medium">{goal.status}</span>
               </div>
             </div>
+
+            {goal.description && (
+              <div className="mt-4 pt-4 border-t space-y-1">
+                <div className="text-xs text-gray-500 uppercase tracking-wide">
+                  Description
+                </div>
+                <p className="text-sm text-gray-800 leading-6 whitespace-pre-wrap">
+                  {goal.description}
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="border rounded p-5 bg-white shadow-sm">

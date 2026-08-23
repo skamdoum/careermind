@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { title, target_level, target_function, primary_resume_id } =
+  const { title, target_level, target_function, description, primary_resume_id } =
     body as Record<string, unknown>;
 
   if (typeof title !== "string") {
@@ -83,6 +83,18 @@ export async function POST(req: Request) {
     );
   }
 
+  if (!isOptionalString(description)) {
+    return NextResponse.json(
+      { success: false, error: "description must be a string or null" },
+      { status: 400 }
+    );
+  }
+
+  const normalizedDescription =
+    description === undefined || description === null
+      ? null
+      : (description as string).trim() || null;
+
   if (!isValidOptionalUuid(primary_resume_id)) {
     return NextResponse.json(
       { success: false, error: "primary_resume_id must be a valid UUID or null" },
@@ -95,6 +107,7 @@ export async function POST(req: Request) {
       title: trimmedTitle,
       target_level: target_level ?? null,
       target_function: target_function ?? null,
+      description: normalizedDescription,
       primary_resume_id: primary_resume_id ?? null,
     });
 

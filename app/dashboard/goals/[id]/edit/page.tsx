@@ -9,6 +9,7 @@ type CareerGoal = {
   title: string;
   target_level: string | null;
   target_function: string | null;
+  description: string | null;
   status: string;
 };
 
@@ -23,6 +24,7 @@ export default function EditGoalPage({ params }: PageProps) {
   const [title, setTitle] = useState("");
   const [targetLevel, setTargetLevel] = useState("");
   const [targetFunction, setTargetFunction] = useState("");
+  const [description, setDescription] = useState("");
 
   const [loadStatus, setLoadStatus] = useState<
     "loading" | "ok" | "not_found" | "error"
@@ -40,6 +42,7 @@ export default function EditGoalPage({ params }: PageProps) {
     setTitle("");
     setTargetLevel("");
     setTargetFunction("");
+    setDescription("");
 
     async function load() {
       try {
@@ -68,6 +71,7 @@ export default function EditGoalPage({ params }: PageProps) {
         setTitle(g.title || "");
         setTargetLevel(g.target_level || "");
         setTargetFunction(g.target_function || "");
+        setDescription(g.description || "");
         setLoadStatus("ok");
       } catch (e: unknown) {
         if (cancelled) return;
@@ -105,6 +109,7 @@ export default function EditGoalPage({ params }: PageProps) {
           title: trimmedTitle,
           target_level: targetLevel.trim() ? targetLevel.trim() : null,
           target_function: targetFunction.trim() ? targetFunction.trim() : null,
+          description: description.trim() ? description.trim() : null,
         }),
       });
 
@@ -213,6 +218,22 @@ export default function EditGoalPage({ params }: PageProps) {
                 maxLength={100}
               />
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="goal-description" className="text-sm font-medium">
+              Describe your career goal{" "}
+              <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              id="goal-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Include the type of role, scope, domain, or career direction you want to pursue."
+              className="w-full border rounded px-3 py-2 text-sm leading-6"
+              rows={5}
+              maxLength={2000}
+            />
           </div>
 
           {error && (

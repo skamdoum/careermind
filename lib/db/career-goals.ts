@@ -7,6 +7,7 @@ export type CareerGoal = {
   title: string;
   target_level: string | null;
   target_function: string | null;
+  description: string | null;
   status: string;
   primary_resume_id: string | null;
   created_at: string;
@@ -17,6 +18,7 @@ export type CreateCareerGoalInput = {
   title: string;
   target_level?: string | null;
   target_function?: string | null;
+  description?: string | null;
   primary_resume_id?: string | null;
 };
 
@@ -24,6 +26,7 @@ export type UpdateCareerGoalInput = {
   title?: string;
   target_level?: string | null;
   target_function?: string | null;
+  description?: string | null;
 };
 
 export async function createCareerGoal(
@@ -40,6 +43,7 @@ export async function createCareerGoal(
       title: input.title,
       target_level: input.target_level ?? null,
       target_function: input.target_function ?? null,
+      description: input.description ?? null,
       primary_resume_id: input.primary_resume_id ?? null,
     })
     .select()
@@ -104,6 +108,7 @@ export async function updateCareerGoal(
   if (input.title !== undefined) payload.title = input.title;
   if (input.target_level !== undefined) payload.target_level = input.target_level;
   if (input.target_function !== undefined) payload.target_function = input.target_function;
+  if (input.description !== undefined) payload.description = input.description;
 
   const { data, error } = await supabase
     .from("career_goals")

@@ -71,7 +71,7 @@ export async function PATCH(req: Request, { params }: RouteProps) {
     );
   }
 
-  const { title, target_level, target_function } = body as Record<
+  const { title, target_level, target_function, description } = body as Record<
     string,
     unknown
   >;
@@ -80,6 +80,7 @@ export async function PATCH(req: Request, { params }: RouteProps) {
     title?: string;
     target_level?: string | null;
     target_function?: string | null;
+    description?: string | null;
   } = {};
 
   if (title !== undefined) {
@@ -117,6 +118,16 @@ export async function PATCH(req: Request, { params }: RouteProps) {
       );
     }
     payload.target_function = normalizeOptional(target_function) ?? null;
+  }
+
+  if (description !== undefined) {
+    if (!isOptionalString(description)) {
+      return NextResponse.json(
+        { success: false, error: "description must be a string or null" },
+        { status: 400 }
+      );
+    }
+    payload.description = normalizeOptional(description) ?? null;
   }
 
   if (Object.keys(payload).length === 0) {

@@ -452,17 +452,6 @@ export default function GoalDetailPage({ params }: PageProps) {
               </div>
             )}
 
-            {insights &&
-              insights.analyzed_role_count >= 2 &&
-              insights.recurring_signals.length === 0 &&
-              insights.recurring_gaps.length === 0 && (
-                <div className="text-sm text-gray-600">
-                  No recurring strengths or gaps across your{" "}
-                  {insights.analyzed_role_count} analyzed roles yet — each role
-                  is currently returning distinct signals.
-                </div>
-              )}
-
             {insights && insights.analyzed_role_count >= 2 && (
               <div className="space-y-5">
                 <div className="text-xs text-gray-500">
@@ -470,11 +459,11 @@ export default function GoalDetailPage({ params }: PageProps) {
                   {insights.analyzed_role_count} analyzed target roles.
                 </div>
 
-                {insights.recurring_signals.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-800">
-                      Recurring strengths
-                    </h3>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-gray-800">
+                    Recurring strengths
+                  </h3>
+                  {insights.recurring_signals.length > 0 ? (
                     <ul className="space-y-2">
                       {insights.recurring_signals.map((item) => (
                         <li
@@ -498,14 +487,20 @@ export default function GoalDetailPage({ params }: PageProps) {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-sm text-gray-600">
+                      No recurring strengths yet across your{" "}
+                      {insights.analyzed_role_count} analyzed roles — each role
+                      currently returns distinct strengths.
+                    </div>
+                  )}
+                </div>
 
-                {insights.recurring_gaps.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-800">
-                      Recurring gaps
-                    </h3>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-gray-800">
+                    Recurring gaps
+                  </h3>
+                  {insights.recurring_gaps.length > 0 ? (
                     <ul className="space-y-2">
                       {insights.recurring_gaps.map((item) => (
                         <li
@@ -529,14 +524,19 @@ export default function GoalDetailPage({ params }: PageProps) {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-sm text-gray-600">
+                      No gap currently appears across multiple target roles.
+                      Your identified gaps are role-specific so far.
+                    </div>
+                  )}
+                </div>
 
-                {insights.recommended_focus.length > 0 && (
-                  <div className="border rounded p-4 bg-green-50 space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      Recommended focus
-                    </h3>
+                <div className="border rounded p-4 bg-green-50 space-y-2">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Recommended focus
+                  </h3>
+                  {insights.recommended_focus.length > 0 ? (
                     <ul className="space-y-1">
                       {insights.recommended_focus.map((line, i) => (
                         <li
@@ -547,8 +547,13 @@ export default function GoalDetailPage({ params }: PageProps) {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-sm text-gray-800">
+                      Recommended focus appears once at least one gap recurs
+                      across roles.
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </section>

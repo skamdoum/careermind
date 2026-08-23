@@ -23,6 +23,22 @@ function normalizeKey(raw: string | null | undefined): string {
   return raw.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/**
+ * Bucket key that prefers the canonical code and falls back to normalized text
+ * for legacy rows written before the taxonomy shipped. The `text:` prefix on
+ * fallback keys prevents accidental collision between a legacy free-text label
+ * and a canonical code that happens to normalize to the same string.
+ */
+function bucketKeyFor(
+  code: string | null | undefined,
+  name: string | null | undefined
+): string {
+  const trimmedCode = code?.trim();
+  if (trimmedCode) return trimmedCode;
+  const textKey = normalizeKey(name);
+  return textKey ? `text:${textKey}` : "";
+}
+
 type Bucket = {
   label: string;
   roles: Set<string>;
@@ -186,12 +202,12 @@ export async function getGoalCrossJobInsights(
   const [signalsResult, gapsResult] = await Promise.all([
     supabase
       .from("signal_assessments")
-      .select("analysis_id, signal_name, score, rationale")
+      .select("analysis_id, signal_code, signal_name, score, rationale")
       .in("analysis_id", latestIds)
       .eq("user_id", user.id),
     supabase
       .from("gaps")
-      .select("analysis_id, gap_title, gap_description, priority")
+      .select("analysis_id, gap_code, gap_title, gap_description, priority")
       .in("analysis_id", latestIds)
       .eq("user_id", user.id),
   ]);
@@ -208,7 +224,10 @@ export async function getGoalCrossJobInsights(
     .filter((s: { score: number }) => (s.score ?? 0) >= STRONG_SIGNAL_THRESHOLD)
     .map((s) => ({
       analysisId: s.analysis_id as string,
-      key: normalizeKey(s.signal_name as string | null),
+      key: bucketKeyFor(
+        s.signal_code as string | null,
+        s.signal_name as string | null
+      ),
       displayLabel: (s.signal_name as string | null)?.trim() || "",
       weight: Number(s.score) || 0,
       rationale: (s.rationale as string | null) ?? null,
@@ -216,7 +235,10 @@ export async function getGoalCrossJobInsights(
 
   const gapInputs: BucketInput[] = (gapsResult.data ?? []).map((g) => ({
     analysisId: g.analysis_id as string,
-    key: normalizeKey(g.gap_title as string | null),
+    key: bucketKeyFor(
+      g.gap_code as string | null,
+      g.gap_title as string | null
+    ),
     displayLabel: (g.gap_title as string | null)?.trim() || "",
     weight: Number(g.priority) || 0,
     rationale: (g.gap_description as string | null) ?? null,

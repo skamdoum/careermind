@@ -3,6 +3,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
+import {
+  GAP_CODES,
+  SIGNAL_CODES,
+  gapCodeRubric,
+  signalCodeRubric,
+} from "@/lib/db/taxonomy";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -199,18 +205,26 @@ OUTPUT REQUIREMENTS:
 
 3. TOP SIGNALS (max 6)
 Each must include:
-- name
+- signal_code (choose EXACTLY one canonical code from the SIGNAL CODES list below)
+- name (short human-readable label; may add nuance beyond the code)
 - score (1–5)
 - reasoning (specific)
 - evidence (bullet list)
 - importance (High / Medium / Low)
 
+SIGNAL CODES — pick the closest fit; do not invent new codes:
+${signalCodeRubric()}
+
 4. CRITICAL GAPS (max 4)
 Each must include:
-- title
+- gap_code (choose EXACTLY one canonical code from the GAP CODES list below)
+- title (short human-readable label; may add nuance beyond the code)
 - description
 - why_this_matters (tie directly to hiring decision)
 - severity (High / Medium / Low)
+
+GAP CODES — pick the closest fit; do not invent new codes:
+${gapCodeRubric()}
 
 5. PRIORITIZED ACTION PLAN (max 5 tasks)
 Each must include:
@@ -278,6 +292,10 @@ Return only valid JSON.
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    signal_code: {
+                      type: "string",
+                      enum: [...SIGNAL_CODES],
+                    },
                     signal_name: { type: "string" },
                     score: { type: "integer", minimum: 1, maximum: 5 },
                     rationale: { type: "string" },
@@ -295,6 +313,7 @@ Return only valid JSON.
                     }
                   },
                   required: [
+                    "signal_code",
                     "signal_name",
                     "score",
                     "rationale",
@@ -310,12 +329,17 @@ Return only valid JSON.
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    gap_code: {
+                      type: "string",
+                      enum: [...GAP_CODES],
+                    },
                     gap_title: { type: "string" },
                     gap_description: { type: "string" },
                     priority: { type: "integer" },
                     recommended_fix: { type: "string" }
                   },
                   required: [
+                    "gap_code",
                     "gap_title",
                     "gap_description",
                     "priority",
@@ -400,9 +424,16 @@ const normalizePriorityLabel = (value: unknown): "High" | "Medium" | "Low" => {
   return "Medium";
 };
 
+const signalCodeSet = new Set<string>(SIGNAL_CODES);
+const normalizeSignalCode = (v: unknown): string | null => {
+  const raw = String(v || "").trim();
+  return signalCodeSet.has(raw) ? raw : null;
+};
+
 const signalRows = parsed.signals.map((s: any) => ({
   analysis_id: analysisId,
   user_id: user.id,
+  signal_code: normalizeSignalCode(s.signal_code),
   signal_name: s.signal_name,
   score: Math.max(1, Math.min(5, Number(s.score) || 1)),
   rationale: s.rationale,
@@ -420,9 +451,16 @@ const signalRows = parsed.signals.map((s: any) => ({
     }
 
     if (parsed.gaps?.length) {
+      const gapCodeSet = new Set<string>(GAP_CODES);
+      const normalizeGapCode = (v: unknown): string | null => {
+        const raw = String(v || "").trim();
+        return gapCodeSet.has(raw) ? raw : null;
+      };
+
       const gapRows = parsed.gaps.map((g: any) => ({
         analysis_id: analysisId,
         user_id: user.id,
+        gap_code: normalizeGapCode(g.gap_code),
         gap_title: g.gap_title,
         gap_description: g.gap_description,
         priority: g.priority,

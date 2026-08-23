@@ -50,7 +50,7 @@ export default function NewGoalPage() {
         return;
       }
 
-      router.push(`/dashboard/goals/${json.data.id}`);
+      router.push(`/dashboard/goals/${json.data.id}?r=${Date.now()}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create career goal.");
       setSubmitting(false);

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 type CareerGoal = {
   id: string;
@@ -13,17 +13,23 @@ type CareerGoal = {
   created_at: string;
 };
 
-export default function GoalsListPage() {
+function GoalsListContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const refreshKey = searchParams.get("r") ?? "";
+
   const [goals, setGoals] = useState<CareerGoal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
+    setGoals(null);
+    setError(null);
+
     async function load() {
       try {
-        const res = await fetch("/api/goals");
+        const res = await fetch("/api/goals", { cache: "no-store" });
 
         if (res.status === 401) {
           router.replace("/login");
@@ -35,16 +41,16 @@ export default function GoalsListPage() {
         if (cancelled) return;
 
         if (!res.ok || !json?.success) {
-          setError(json?.error || "Failed to load career goals");
           setGoals([]);
+          setError(json?.error || "Failed to load career goals");
           return;
         }
 
         setGoals(json.data as CareerGoal[]);
       } catch (e: unknown) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Failed to load career goals");
         setGoals([]);
+        setError(e instanceof Error ? e.message : "Failed to load career goals");
       }
     }
 
@@ -53,7 +59,7 @@ export default function GoalsListPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, refreshKey]);
 
   const isLoading = goals === null && !error;
   const isEmpty = goals !== null && goals.length === 0 && !error;
@@ -141,5 +147,17 @@ export default function GoalsListPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function GoalsListPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-sm text-gray-500">Loading career goals…</div>
+      }
+    >
+      <GoalsListContent />
+    </Suspense>
   );
 }

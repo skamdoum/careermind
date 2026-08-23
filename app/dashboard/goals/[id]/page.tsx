@@ -26,6 +26,20 @@ type TargetJob = {
   created_at: string;
 };
 
+type RecurringItem = {
+  label: string;
+  count: number;
+  percentage: number;
+  sample_rationale: string | null;
+};
+
+type GoalInsights = {
+  analyzed_role_count: number;
+  recurring_signals: RecurringItem[];
+  recurring_gaps: RecurringItem[];
+  recommended_focus: string[];
+};
+
 type PageProps = {
   params: Promise<{ id: string }>;
 };
@@ -51,6 +65,9 @@ export default function GoalDetailPage({ params }: PageProps) {
   const [jobs, setJobs] = useState<TargetJob[] | null>(null);
   const [jobsError, setJobsError] = useState<string | null>(null);
 
+  const [insights, setInsights] = useState<GoalInsights | null>(null);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -62,6 +79,8 @@ export default function GoalDetailPage({ params }: PageProps) {
     setError(null);
     setJobs(null);
     setJobsError(null);
+    setInsights(null);
+    setInsightsError(null);
 
     async function loadGoal() {
       try {
@@ -133,8 +152,42 @@ export default function GoalDetailPage({ params }: PageProps) {
       }
     }
 
+    async function loadInsights() {
+      try {
+        const res = await fetch(`/api/goals/${id}/insights`, {
+          cache: "no-store",
+        });
+
+        if (res.status === 401) {
+          router.replace("/login");
+          return;
+        }
+
+        if (res.status === 404) {
+          if (!cancelled) setInsights(null);
+          return;
+        }
+
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+
+        if (!res.ok || !json?.success) {
+          setInsightsError(json?.error || "Failed to load insights");
+          return;
+        }
+
+        setInsights(json.data as GoalInsights);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setInsightsError(
+          e instanceof Error ? e.message : "Failed to load insights"
+        );
+      }
+    }
+
     loadGoal();
     loadJobs();
+    loadInsights();
 
     return () => {
       cancelled = true;
@@ -365,6 +418,137 @@ export default function GoalDetailPage({ params }: PageProps) {
                     </Link>
                   );
                 })}
+              </div>
+            )}
+          </section>
+
+          <section className="border rounded p-5 bg-white shadow-sm">
+            <div className="mb-3">
+              <h2 className="font-semibold text-lg">Cross-job insights</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Patterns across your analyzed target roles under this goal.
+              </p>
+            </div>
+
+            {insights === null && !insightsError && (
+              <div className="text-sm text-gray-500">Loading insights…</div>
+            )}
+
+            {insightsError && (
+              <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
+                {insightsError}
+              </div>
+            )}
+
+            {insights && insights.analyzed_role_count < 2 && (
+              <div className="border border-dashed rounded p-6 bg-gray-50 text-sm text-gray-700 text-center space-y-1">
+                <p className="font-medium">Not enough analyzed roles yet.</p>
+                <p className="text-gray-600">
+                  Analyze at least 2 target roles to identify patterns across
+                  your market.{" "}
+                  {insights.analyzed_role_count === 1 &&
+                    "You've analyzed 1 so far."}
+                </p>
+              </div>
+            )}
+
+            {insights &&
+              insights.analyzed_role_count >= 2 &&
+              insights.recurring_signals.length === 0 &&
+              insights.recurring_gaps.length === 0 && (
+                <div className="text-sm text-gray-600">
+                  No recurring strengths or gaps across your{" "}
+                  {insights.analyzed_role_count} analyzed roles yet — each role
+                  is currently returning distinct signals.
+                </div>
+              )}
+
+            {insights && insights.analyzed_role_count >= 2 && (
+              <div className="space-y-5">
+                <div className="text-xs text-gray-500">
+                  Based on the latest analysis for each of your{" "}
+                  {insights.analyzed_role_count} analyzed target roles.
+                </div>
+
+                {insights.recurring_signals.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Recurring strengths
+                    </h3>
+                    <ul className="space-y-2">
+                      {insights.recurring_signals.map((item) => (
+                        <li
+                          key={`signal-${item.label}`}
+                          className="border rounded p-3 bg-gray-50"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-sm font-medium">
+                              {item.label}
+                            </div>
+                            <div className="text-xs text-gray-600 whitespace-nowrap">
+                              {item.count} of {insights.analyzed_role_count}{" "}
+                              roles · {item.percentage}%
+                            </div>
+                          </div>
+                          {item.sample_rationale && (
+                            <div className="text-xs text-gray-600 mt-1 leading-5">
+                              {item.sample_rationale}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {insights.recurring_gaps.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-gray-800">
+                      Recurring gaps
+                    </h3>
+                    <ul className="space-y-2">
+                      {insights.recurring_gaps.map((item) => (
+                        <li
+                          key={`gap-${item.label}`}
+                          className="border rounded p-3 bg-gray-50"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-sm font-medium">
+                              {item.label}
+                            </div>
+                            <div className="text-xs text-gray-600 whitespace-nowrap">
+                              {item.count} of {insights.analyzed_role_count}{" "}
+                              roles · {item.percentage}%
+                            </div>
+                          </div>
+                          {item.sample_rationale && (
+                            <div className="text-xs text-gray-600 mt-1 leading-5">
+                              {item.sample_rationale}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {insights.recommended_focus.length > 0 && (
+                  <div className="border rounded p-4 bg-green-50 space-y-2">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Recommended focus
+                    </h3>
+                    <ul className="space-y-1">
+                      {insights.recommended_focus.map((line, i) => (
+                        <li
+                          key={`focus-${i}`}
+                          className="text-sm text-gray-900 leading-6"
+                        >
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </section>

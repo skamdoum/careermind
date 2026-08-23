@@ -30,9 +30,78 @@ export async function POST(req: Request) {
       targetRole,
       targetLevel,
       latestResume,
+      career_goal_id,
+      job_description_id,
     } = body;
 
-    if (!jobDescription) {
+    if (
+      (career_goal_id && !job_description_id) ||
+      (!career_goal_id && job_description_id)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "career_goal_id and job_description_id must be provided together",
+        },
+        { status: 400 }
+      );
+    }
+
+    let effectiveJobDescription: string | undefined = jobDescription;
+    let effectiveTargetRole: string | undefined = targetRole;
+    let effectiveTargetLevel: string | undefined = targetLevel;
+
+    if (career_goal_id && job_description_id) {
+      const { data: goal, error: goalError } = await supabase
+        .from("career_goals")
+        .select("id, target_level, target_function")
+        .eq("id", career_goal_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (goalError) {
+        return NextResponse.json(
+          { success: false, error: goalError.message },
+          { status: 500 }
+        );
+      }
+
+      if (!goal) {
+        return NextResponse.json(
+          { success: false, error: "Career goal not found" },
+          { status: 404 }
+        );
+      }
+
+      const { data: job, error: jobError } = await supabase
+        .from("job_descriptions")
+        .select("id, jd_text, career_goal_id, role_title")
+        .eq("id", job_description_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (jobError) {
+        return NextResponse.json(
+          { success: false, error: jobError.message },
+          { status: 500 }
+        );
+      }
+
+      if (!job || job.career_goal_id !== career_goal_id) {
+        return NextResponse.json(
+          { success: false, error: "Target job not found" },
+          { status: 404 }
+        );
+      }
+
+      effectiveJobDescription = job.jd_text;
+      effectiveTargetRole =
+        job.role_title || goal.target_function || targetRole || "PM";
+      effectiveTargetLevel = goal.target_level || targetLevel || "Senior";
+    }
+
+    if (!effectiveJobDescription) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
         { status: 400 }
@@ -170,11 +239,11 @@ Return only valid JSON.
             {
               type: "input_text",
               text: `
-      TARGET ROLE: ${targetRole}
-      TARGET LEVEL: ${targetLevel}
+      TARGET ROLE: ${effectiveTargetRole}
+      TARGET LEVEL: ${effectiveTargetLevel}
 
       JOB DESCRIPTION:
-      ${jobDescription}
+      ${effectiveJobDescription}
               `
             }
           ]
@@ -288,7 +357,10 @@ Return only valid JSON.
         model_name: "gpt-4.1",
         raw_json: parsed,
         summary: parsed.positioning_summary,
-        status: "completed"
+        status: "completed",
+        career_goal_id: career_goal_id ?? null,
+        job_description_id: job_description_id ?? null,
+        resume_id: latestResume?.id ?? null,
       })
       .select()
       .single();

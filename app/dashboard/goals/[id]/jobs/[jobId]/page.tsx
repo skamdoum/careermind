@@ -15,6 +15,13 @@ type TargetJob = {
   created_at: string;
 };
 
+type AnalysisSummary = {
+  id: string;
+  summary: string | null;
+  created_at: string;
+  raw_json: { core_verdict?: string } | null;
+};
+
 type PageProps = {
   params: Promise<{ id: string; jobId: string }>;
 };
@@ -33,6 +40,77 @@ export default function TargetJobDetailPage({ params }: PageProps) {
 
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [latestResume, setLatestResume] = useState<{
+    id: string;
+    file_name?: string | null;
+  } | null>(null);
+  const [resumeChecked, setResumeChecked] = useState(false);
+
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+
+  const [analyses, setAnalyses] = useState<AnalysisSummary[] | null>(null);
+  const [analysesError, setAnalysesError] = useState<string | null>(null);
+
+  async function handleAnalyze() {
+    if (analyzing) return;
+
+    if (!latestResume) {
+      setAnalyzeError(
+        "Upload a resume first, then come back to run the analysis."
+      );
+      return;
+    }
+
+    setAnalyzeError(null);
+    setAnalyzing(true);
+
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          career_goal_id: goalId,
+          job_description_id: jobId,
+          latestResume,
+        }),
+      });
+
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.success) {
+        if (json?.data?.code === "LIMIT_REACHED") {
+          setAnalyzeError(
+            "You've reached the free analysis limit. Upgrade to continue."
+          );
+        } else {
+          setAnalyzeError(json?.error || "Failed to run analysis.");
+        }
+        setAnalyzing(false);
+        return;
+      }
+
+      const analysisId = json.data?.analysisId;
+      if (!analysisId) {
+        setAnalyzeError("Analysis succeeded but no analysis id was returned.");
+        setAnalyzing(false);
+        return;
+      }
+
+      window.location.assign(`/dashboard/${analysisId}`);
+    } catch (e: unknown) {
+      setAnalyzeError(
+        e instanceof Error ? e.message : "Failed to run analysis."
+      );
+      setAnalyzing(false);
+    }
+  }
 
   async function handleDelete() {
     if (deleting) return;
@@ -77,8 +155,12 @@ export default function TargetJobDetailPage({ params }: PageProps) {
     setJob(null);
     setStatus("loading");
     setError(null);
+    setLatestResume(null);
+    setResumeChecked(false);
+    setAnalyses(null);
+    setAnalysesError(null);
 
-    async function load() {
+    async function loadJob() {
       try {
         const res = await fetch(`/api/goals/${goalId}/jobs/${jobId}`, {
           cache: "no-store",
@@ -117,7 +199,61 @@ export default function TargetJobDetailPage({ params }: PageProps) {
       }
     }
 
-    load();
+    async function loadResume() {
+      try {
+        const res = await fetch("/api/resumes/latest", { cache: "no-store" });
+        if (res.status === 401) return;
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (res.ok && json?.success && json.data) {
+          setLatestResume(json.data);
+        }
+      } catch {
+        // Non-fatal — CTA will show the "upload a resume first" hint.
+      } finally {
+        if (!cancelled) setResumeChecked(true);
+      }
+    }
+
+    async function loadAnalyses() {
+      try {
+        const res = await fetch(
+          `/api/goals/${goalId}/jobs/${jobId}/analyses`,
+          { cache: "no-store" }
+        );
+
+        if (res.status === 401) {
+          router.replace("/login");
+          return;
+        }
+
+        if (res.status === 404) {
+          if (!cancelled) setAnalyses([]);
+          return;
+        }
+
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+
+        if (!res.ok || !json?.success) {
+          setAnalyses([]);
+          setAnalysesError(json?.error || "Failed to load analysis history");
+          return;
+        }
+
+        setAnalyses(json.data as AnalysisSummary[]);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setAnalyses([]);
+        setAnalysesError(
+          e instanceof Error ? e.message : "Failed to load analysis history"
+        );
+      }
+    }
+
+    loadJob();
+    loadResume();
+    loadAnalyses();
 
     return () => {
       cancelled = true;
@@ -183,7 +319,21 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={analyzing || !resumeChecked || !latestResume}
+              className="px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              title={
+                !latestResume && resumeChecked
+                  ? "Upload a resume first"
+                  : undefined
+              }
+            >
+              {analyzing ? "Analyzing…" : "Analyze this role"}
+            </button>
+
             <Link
               href={`/dashboard/goals/${goalId}/jobs/${jobId}/edit`}
               className="px-3 py-2 rounded text-sm font-medium border hover:bg-gray-50"
@@ -199,6 +349,28 @@ export default function TargetJobDetailPage({ params }: PageProps) {
               {deleting ? "Deleting…" : "Delete"}
             </button>
           </div>
+
+          {resumeChecked && !latestResume && (
+            <div className="border border-amber-200 bg-amber-50 text-amber-900 rounded p-3 text-sm">
+              You need a resume on file to run an analysis.{" "}
+              <Link href="/analyze" className="underline font-medium">
+                Upload a resume
+              </Link>
+              , then come back to analyze this role.
+            </div>
+          )}
+
+          {analyzing && (
+            <div className="border rounded p-3 bg-gray-50 text-sm text-gray-700">
+              Running analysis against this role — this can take up to a minute.
+            </div>
+          )}
+
+          {analyzeError && (
+            <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
+              {analyzeError}
+            </div>
+          )}
 
           {deleteError && (
             <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
@@ -219,6 +391,63 @@ export default function TargetJobDetailPage({ params }: PageProps) {
               </a>
             </section>
           )}
+
+          <section className="border rounded p-5 bg-white shadow-sm">
+            <h2 className="font-semibold text-lg mb-3">Analysis history</h2>
+
+            {analyses === null && !analysesError && (
+              <div className="text-sm text-gray-500">Loading analyses…</div>
+            )}
+
+            {analysesError && (
+              <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
+                {analysesError}
+              </div>
+            )}
+
+            {analyses !== null && analyses.length === 0 && !analysesError && (
+              <div className="text-sm text-gray-500">
+                No analyses yet. Run your first analysis for this role.
+              </div>
+            )}
+
+            {analyses !== null && analyses.length > 0 && (
+              <div className="space-y-3">
+                {analyses.map((a) => {
+                  const verdict = a.raw_json?.core_verdict;
+                  return (
+                    <Link
+                      key={a.id}
+                      href={`/dashboard/${a.id}`}
+                      className="block border rounded p-4 hover:bg-gray-50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-sm text-gray-500">
+                          {new Date(a.created_at).toLocaleString()}
+                        </div>
+                        {verdict && (
+                          <span
+                            className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
+                              verdict === "Strong Hire"
+                                ? "bg-green-100 text-green-800"
+                                : verdict === "Borderline"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {verdict}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-blue-600 mt-2">
+                        View analysis →
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
           <section className="border rounded p-5 bg-white shadow-sm">
             <h2 className="font-semibold text-lg mb-3">Job description</h2>

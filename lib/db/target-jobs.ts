@@ -110,6 +110,32 @@ export async function getTargetJobsByGoal(
   return (data ?? []) as TargetJob[];
 }
 
+export type TargetJobAnalysisSummary = {
+  id: string;
+  summary: string | null;
+  created_at: string;
+  raw_json: Record<string, unknown> | null;
+};
+
+export async function getAnalysesForTargetJob(
+  jobId: string
+): Promise<TargetJobAnalysisSummary[]> {
+  const { supabase, user } = await requireUser();
+
+  const { data, error } = await supabase
+    .from("analyses")
+    .select("id, summary, created_at, raw_json")
+    .eq("job_description_id", jobId)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to fetch analyses: ${error.message}`);
+  }
+
+  return (data ?? []) as TargetJobAnalysisSummary[];
+}
+
 export async function getTargetJobById(
   id: string
 ): Promise<TargetJob | null> {

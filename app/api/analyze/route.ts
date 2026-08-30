@@ -47,6 +47,19 @@ export async function POST(req: Request) {
       job_description_id,
     } = body;
 
+    // Accept an explicit resume_id, with backwards-compat for the older
+    // { latestResume: { id } } shape. The server never trusts client-supplied
+    // file_path / file_name / mime_type — those are always resolved from the
+    // DB row below to prevent stale or spoofed client state from steering the
+    // analysis at another candidate's file.
+    const pickResumeId = (v: unknown): string | null => {
+      if (typeof v !== "string") return null;
+      const trimmed = v.trim();
+      return trimmed ? trimmed : null;
+    };
+    const clientResumeId: string | null =
+      pickResumeId(body?.resume_id) ?? pickResumeId(latestResume?.id);
+
     if (
       (career_goal_id && !job_description_id) ||
       (!career_goal_id && job_description_id)
@@ -140,48 +153,138 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!resumeText && !latestResume?.file_path) {
+    // ------------------------------------------------------------------
+    // Server-side resume resolution.
+    //
+    // Invariant: each analysis request resolves to exactly ONE resume
+    // identity, resolved server-side against the authenticated user + active
+    // career profile. The client's file_path / file_name / mime_type are
+    // never trusted — they are informational only. This prevents stale
+    // frontend state (e.g. the goal/job page's mount-only `latestResume`
+    // useEffect being served from Next.js router cache after a new upload)
+    // from silently steering the analysis at a previous candidate's file.
+    // ------------------------------------------------------------------
+    type ResumeRow = {
+      id: string;
+      file_path: string;
+      file_name: string | null;
+      mime_type: string | null;
+      user_id: string;
+      career_profile_id: string | null;
+    };
+
+    let resolvedResume: ResumeRow | null = null;
+
+    if (clientResumeId) {
+      const { data: row, error: resumeErr } = await supabase
+        .from("resumes")
+        .select("id, file_path, file_name, mime_type, user_id, career_profile_id")
+        .eq("id", clientResumeId)
+        .eq("user_id", user.id)
+        .eq("career_profile_id", activeProfileId)
+        .maybeSingle();
+
+      if (resumeErr) {
+        return NextResponse.json(
+          { success: false, error: resumeErr.message },
+          { status: 500 }
+        );
+      }
+
+      if (!row) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Resume not found for the active career profile. Refresh and try again.",
+          },
+          { status: 404 }
+        );
+      }
+
+      resolvedResume = row as ResumeRow;
+    } else if (!resumeText) {
+      // No explicit id and no pasted text — fall back to the newest resume
+      // for this user + active profile. Mirrors /api/resumes/latest, but
+      // done inline so it can never disagree with what the client last saw.
+      const { data: row, error: latestErr } = await supabase
+        .from("resumes")
+        .select("id, file_path, file_name, mime_type, user_id, career_profile_id")
+        .eq("user_id", user.id)
+        .eq("career_profile_id", activeProfileId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestErr) {
+        return NextResponse.json(
+          { success: false, error: latestErr.message },
+          { status: 500 }
+        );
+      }
+
+      if (row) {
+        resolvedResume = row as ResumeRow;
+      }
+    }
+
+    if (!resolvedResume && !resumeText) {
       return NextResponse.json(
         { success: false, error: "Provide resume text or upload a resume first" },
         { status: 400 }
       );
     }
 
-      const resumeContentParts: any[] = [];
+    const resumeContentParts: any[] = [];
+    let debugOpenAiFileId: string | null = null;
 
-      if (latestResume?.file_path) {
-        const { data: fileData, error: downloadError } = await supabaseAdmin.storage
-          .from("resumes")
-          .download(latestResume.file_path);
+    if (resolvedResume) {
+      const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+        .from("resumes")
+        .download(resolvedResume.file_path);
 
-        if (downloadError) {
-          throw downloadError;
-        }
-
-        const bytes = Buffer.from(await fileData.arrayBuffer());
-
-        const openaiFile = await openai.files.create({
-          file: new File([bytes], latestResume.file_name || "resume.pdf", {
-            type: latestResume.mime_type || "application/octet-stream",
-          }),
-          purpose: "user_data",
-        });
-
-        resumeContentParts.push({
-          type: "input_file",
-          file_id: openaiFile.id,
-        });
+      if (downloadError) {
+        throw downloadError;
       }
 
-      // Isolate the resume source: only fall back to pasted text when no
-      // resume file was loaded. Never send both — stale pasted text alongside
-      // a fresh uploaded file could contaminate evidence grounding.
-      if (resumeContentParts.length === 0 && resumeText) {
-        resumeContentParts.push({
-          type: "input_text",
-          text: `RESUME TEXT:\n${resumeText}`,
-        });
-      }
+      const bytes = Buffer.from(await fileData.arrayBuffer());
+
+      const openaiFile = await openai.files.create({
+        file: new File([bytes], resolvedResume.file_name || "resume.pdf", {
+          type: resolvedResume.mime_type || "application/octet-stream",
+        }),
+        purpose: "user_data",
+      });
+
+      debugOpenAiFileId = openaiFile.id;
+
+      resumeContentParts.push({
+        type: "input_file",
+        file_id: openaiFile.id,
+      });
+    }
+
+    // Isolate the resume source: only fall back to pasted text when no
+    // resume file was loaded. Never send both — stale pasted text alongside
+    // a fresh uploaded file could contaminate evidence grounding.
+    if (resumeContentParts.length === 0 && resumeText) {
+      resumeContentParts.push({
+        type: "input_text",
+        text: `RESUME TEXT:\n${resumeText}`,
+      });
+    }
+
+    // Safe debug trail — identifiers only, never resume contents.
+    console.log("[analyze] resume identity", {
+      user_id: user.id,
+      career_profile_id: activeProfileId,
+      client_resume_id: clientResumeId,
+      resolved_resume_id: resolvedResume?.id ?? null,
+      resolved_file_path: resolvedResume?.file_path ?? null,
+      resolved_file_name: resolvedResume?.file_name ?? null,
+      openai_file_id: debugOpenAiFileId,
+      used_resume_text_fallback: !resolvedResume && !!resumeText,
+    });
     const response = await openai.responses.create({
       model: "gpt-4.1",
       input: [
@@ -593,7 +696,9 @@ Return only valid JSON.`,
         career_profile_id: activeProfileId,
         career_goal_id: career_goal_id ?? null,
         job_description_id: job_description_id ?? null,
-        resume_id: latestResume?.id ?? null,
+        // Persist the server-resolved resume id — not the client's — so the
+        // analysis row is always attributable to the file we actually sent.
+        resume_id: resolvedResume?.id ?? null,
       })
       .select()
       .single();

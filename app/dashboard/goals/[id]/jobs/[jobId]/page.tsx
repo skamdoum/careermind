@@ -67,13 +67,37 @@ export default function TargetJobDetailPage({ params }: PageProps) {
     setAnalyzing(true);
 
     try {
+      // Refresh the latest resume server-side right before submitting.
+      // The mount-only useEffect can leave `latestResume` pointing at a
+      // previous candidate when the user uploads a new resume elsewhere and
+      // navigates back here — Next.js's router cache preserves the client
+      // state without re-running the effect. Refetching (and letting the
+      // server resolve the file by id anyway) prevents any stale identity
+      // from steering the analysis at the wrong resume.
+      let resumeIdToSend = latestResume.id;
+      try {
+        const refreshRes = await fetch("/api/resumes/latest", {
+          cache: "no-store",
+        });
+        if (refreshRes.ok) {
+          const refreshJson = await refreshRes.json().catch(() => null);
+          if (refreshJson?.success && refreshJson.data?.id) {
+            resumeIdToSend = refreshJson.data.id as string;
+            setLatestResume(refreshJson.data);
+          }
+        }
+      } catch {
+        // Non-fatal — fall through with whatever id we already have. The
+        // server still verifies the id against the active profile.
+      }
+
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           career_goal_id: goalId,
           job_description_id: jobId,
-          latestResume,
+          resume_id: resumeIdToSend,
         }),
       });
 

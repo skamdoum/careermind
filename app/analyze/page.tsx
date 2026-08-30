@@ -139,7 +139,10 @@ async function handleAnalyze() {
         jobDescription,
         targetRole: "PM",
         targetLevel: "Senior",
-        latestResume,
+        // The server always resolves the actual file from this id against
+        // the user + active career profile. `latestResume` metadata like
+        // file_path / file_name from the client is deliberately not sent.
+        resume_id: latestResume?.id ?? null,
       }),
     });
 

@@ -413,6 +413,31 @@ Do NOT emit a gap merely because:
 
 Resume-optimization opportunities belong in the coaching / action-plan output, not automatically in the "gaps" output.
 
+JD-GROUNDING TEST (RUN BEFORE FINALIZING EVERY GAP)
+
+Evaluate against the ACTUAL target JD supplied in this request — never against generalized market expectations for similar roles. For each proposed gap, answer three questions:
+
+1. What specific requirement in THIS target JD makes this gap materially relevant?
+2. Is that requirement explicit in the JD, or a direct and reasonable inference from the role description?
+3. Would a hiring decision for THIS role materially depend on this missing evidence?
+
+If the answer to any of these is no:
+- do not create the gap;
+- do not substitute generalized expectations from similar roles;
+- do not introduce technologies, domains, certifications, methodologies, or experience that the JD does not materially require.
+
+Prohibited justifications for a gap — do NOT emit a gap based on reasoning such as:
+- "this is often expected in similar roles"
+- "many Principal PMs have..."
+- "the industry increasingly values..."
+- "this may be useful for technical PM roles"
+- "AI experience is increasingly common for platform roles"
+- any other appeal to what similar roles usually require
+
+unless the target JD itself supports the requirement.
+
+Absence of a desirable-but-non-required skill belongs in coaching (action plan) only if useful. It is NOT a hiring gap.
+
 Examples:
 - If the resume explicitly states ownership of multi-year platform strategy, do not create a "platform strategy insufficient" gap.
 - If the resume explicitly shows executive investment influence, do not create an executive-influence gap.
@@ -458,6 +483,35 @@ PRINCIPAL-level evidence generally requires additional scope such as:
 Excellent Senior-level execution does NOT automatically establish Principal-level altitude.
 Do not require every Principal characteristic if the resume clearly demonstrates equivalent strategic scope through other evidence.
 Titles alone do not establish altitude.
+
+SENIOR STRONG HIRE — required vs. NOT required
+
+For SENIOR roles, Strong Hire can be justified by strong direct evidence of any of:
+- meaningful product-area ownership
+- product strategy and roadmap ownership
+- prioritization
+- cross-functional leadership
+- customer/developer discovery
+- measurable product or operational outcomes
+- technical/product judgment appropriate to the role
+- stakeholder influence appropriate to Senior scope
+
+For SENIOR roles, do NOT require the following unless the target JD explicitly requires them:
+- C-suite influence
+- organization-wide investment allocation
+- company-level platform bets
+- cross-org multi-year strategy
+- broad organizational leverage
+- ecosystem-scale strategic influence
+
+Those remain appropriate PRINCIPAL-level discriminators; they are not Senior gating criteria.
+
+Explicit calibration rules:
+
+- Do not downgrade a strong Senior candidate merely because the resume lacks Principal-level organizational or executive altitude.
+- Evaluate executive influence RELATIVE TO the target level. For Senior roles, influence with engineering leadership, product leadership, customers, sales, customer success, and senior stakeholders may be sufficient — unless the JD explicitly requires executive / C-suite influence.
+
+None of the above weakens Senior requirements in general. Missing core Senior-level evidence (e.g. no PM ownership, no roadmap/prioritization, no cross-functional leadership) remains a material gap.
 
 ================================================================
 OUTPUT REQUIREMENTS
@@ -546,6 +600,21 @@ Prioritize gaps in this order:
 5. Secondary resume-positioning improvements.
 
 Do NOT allow a secondary presentation issue to outrank a fundamental qualification problem.
+
+SEMANTIC OVERLAP PASS (RUN BEFORE FINALIZING THE GAPS ARRAY)
+
+After you have generated the candidate gaps and applied the GAP COUNTER-EVIDENCE TEST and the JD-GROUNDING TEST, do one more pass. For each pair of remaining gaps, ask:
+
+- Are they caused by the same underlying missing capability?
+- Would closing one substantially close the other?
+- Are they likely to produce the same hiring consequence?
+- Would a hiring manager describe them as one concern rather than two?
+
+If any of those is yes, MERGE them into one broader-but-precise material gap that names the underlying capability. Keep gaps separate only when they represent meaningfully different hiring risks.
+
+Target: 0–4 distinct material gaps. Fewer is better when the evidence supports consolidation. Zero gaps remains valid.
+
+Do NOT hide genuinely distinct issues merely to reduce count. Merging is a clarity tool, not a hiding tool — if two gaps address different underlying concerns and would need different fixes, keep them separate.
 
 The order of the "gaps" array IS the priority (index 0 = highest priority).
 The numeric "priority" field must be a positive integer starting at 1 — 1 for the highest-priority gap, 2 for the next, and so on. Never emit 0 or a negative value.

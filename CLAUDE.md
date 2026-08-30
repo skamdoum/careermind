@@ -188,13 +188,14 @@ There is currently **no deterministic verdict calculation**. Signal scores do no
 
 This conflicts with the AI Rules section above (deterministic logic should own verdicts/counts). Deliberate decision: fix in **V2.2** after V2.1's prompt/evidence improvements are measured.
 
-### V2 strategy — three stages
+### V2 strategy — four stages
 
 - **V2.1** — Prompt + structured evidence reasoning improvements. Verdict remains AI-generated. **Shipped and measured** — 11/12 verdicts matched the independent evaluation on the frozen suite.
-- **V2.2** — Narrow prompt-calibration update on top of V2.1. Same AI-owned verdict. Addresses two residual failure modes: thin-evidence inflation and false-gap generation despite positive evidence. **No deterministic verdict in this stage.**
-- **V2.3 (still deferred)** — Only if V2.2 measurement still shows verdict calibration is unstable, introduce deterministic verdict logic driven by structured requirement assessments.
+- **V2.2** — Narrow prompt-calibration update on top of V2.1. Same AI-owned verdict. Addressed two residual failure modes: thin-evidence inflation and false-gap generation despite positive evidence. **Shipped and measured** — 11/12 exact verdict agreement on the frozen 12-case calibration suite, 0 false Strong Hires, 0 false Below Bars, 1 overly conservative verdict (CAL-01 Alex Morgan → Senior PM Platform expected Strong Hire, returned Borderline). No deterministic verdict in this stage.
+- **V2.3** — Narrow prompt-calibration update on top of V2.2 addressing three specific issues: Senior-vs-Principal altitude leakage, gaps not grounded in the actual target JD, redundant/overlapping gaps. Same AI-owned verdict. No deterministic verdict in this stage.
+- **V2.4 (still deferred)** — Only if V2.3 measurement still shows verdict calibration is unstable, introduce deterministic verdict logic driven by structured requirement assessments.
 
-Do not skip V2.1 or V2.2.
+Do not skip V2.1, V2.2, or V2.3.
 
 ### V2.1 scope
 
@@ -269,10 +270,36 @@ Preserved from V2.1 unchanged: `GROUNDING (STRICT)`, `EVIDENCE HIERARCHY` (direc
 
 Explicitly NOT in V2.2:
 
-- No deterministic verdict layer — `core_verdict` is still AI-generated. Per the AI Rules, deterministic ownership of verdicts stays deferred to V2.3, contingent on V2.2 measurement.
+- No deterministic verdict layer — `core_verdict` is still AI-generated. Per the AI Rules, deterministic ownership of verdicts stays deferred, contingent on V2.2 measurement.
 - No numerical weighting formula.
 - No schema, API, or frontend changes.
 - No candidate-specific tuning — the prompt contains no test-case names.
+
+### V2.3 scope (calibration only, no deterministic verdict)
+
+Applied on top of V2.2 after the frozen 12-case calibration suite was rerun. V2.2 baseline: 11/12 exact verdict agreement, 0 false Strong Hires, 0 false Below Bars, 1 overly conservative verdict. V2.3 targets three specific failure modes without weakening any V2.1 or V2.2 behavior.
+
+Failure modes addressed:
+
+- **Principal-altitude leakage into Senior evaluation** — a strong Senior candidate was downgraded because the resume lacked Principal-level executive/organizational altitude, even though the target JD was Senior (CAL-01 pattern). Senior Strong Hire must not require executive/C-suite influence, cross-org multi-year strategy, or ecosystem-scale investment leverage unless the JD explicitly asks for them.
+- **Gaps not grounded in the actual target JD** — the evaluator generated an "AI Product Ownership Absent" gap because AI is often expected in similar roles, not because the actual JD required it. Gaps must be grounded in this specific JD, not in generalized market expectations for similar roles.
+- **Redundant/overlapping gaps** — outputs sometimes contained multiple valid gaps that described the same underlying missing capability (e.g. "no product strategy/roadmap ownership" + "no platform vision/multi-year roadmap"). These reduce clarity even when individually correct.
+
+Prompt changes (all in `app/api/analyze/route.ts`; no schema, API, frontend, database, or gap-priority-normalization changes):
+
+1. **Senior Strong Hire — required vs. NOT required** — new subsection inside the existing ALTITUDE CALIBRATION block. Lists the Senior-appropriate criteria that CAN justify Strong Hire, and the Principal-scoped criteria that MUST NOT be required unless the JD explicitly asks. Adds two calibration rules: "Do not downgrade a strong Senior candidate merely because the resume lacks Principal-level organizational or executive altitude" and "Evaluate executive influence RELATIVE TO the target level." The existing "Excellent Senior-level execution does NOT automatically establish Principal-level altitude" sentence is preserved — that protects the Principal cases V2.2 already gets right.
+2. **JD-Grounding Test** — new subsection inside the GAP COUNTER-EVIDENCE TEST section. Three-question test: (1) what specific requirement in THIS JD makes this gap materially relevant, (2) is that requirement explicit in the JD or a direct reasonable inference, (3) would a hiring decision for THIS role materially depend on this missing evidence. Explicit prohibited-justification list: "this is often expected in similar roles" / "many Principal PMs have..." / "the industry increasingly values..." / etc. Non-required desirable skills belong in coaching, not gaps.
+3. **Semantic Overlap Pass** — new subsection inside the CRITICAL GAPS block. Four-question merge test per pair: same underlying missing capability, would closing one substantially close the other, same hiring consequence, would a hiring manager describe them as one concern. Target 0–4 distinct material gaps; fewer is better when the evidence supports consolidation. Guardrail: "do not hide genuinely distinct issues merely to reduce count — merging is a clarity tool, not a hiding tool."
+
+Preserved from V2.1/V2.2 unchanged: GROUNDING (STRICT), EVIDENCE HIERARCHY (direct/supporting/adjacent/none), Evidence Type vs Strength distinction, Ownership/Scope/Complexity/Outcome test, Thin Evidence Rule, ABSENCE OF EVIDENCE ≠ ABSENCE OF CAPABILITY, capability-vs-evidence-gap distinction, positive evidence protection, zero-gap permission, quantified-impact calibration, target-role-relative signal scoring, Senior-vs-Principal altitude framework (Principal side), Strong Hire / Borderline / Below Bar definitions, role_requirements extraction, signal scoring anchors, the schema, the API contract, resume identity resolution, gap priority normalization (server-side arrayIndex+1), and the frontend flow.
+
+Explicitly NOT in V2.3:
+
+- No deterministic verdict layer — `core_verdict` is still AI-generated. Deterministic ownership of verdicts stays deferred to V2.4, contingent on V2.3 measurement.
+- No numerical weighting formula.
+- No schema, API, database, or frontend changes.
+- No source_requirement_id DB field.
+- No candidate-specific tuning — the prompt contains no test-case names, no "Alex", "Morgan", "Jordan", "Maya", "Priya", "Rachel", "Jamie", "Daniel", "Taylor", "Chris" references.
 
 ### Regression strategy
 
@@ -292,23 +319,31 @@ Success = improvements in verdict calibration, evidence grounding, false-gap rat
 
 Decision rule (post-V2.2 rerun):
 
-- Thin-evidence inflation drops AND false-gap generation drops AND V2.1's 11/12 verdict match holds or improves → V2.2 ships; V2.3 (deterministic verdict) remains deferred.
+- Thin-evidence inflation drops AND false-gap generation drops AND V2.1's 11/12 verdict match holds or improves → V2.2 ships; deterministic verdict remains deferred.
 - One failure mode improves but the other regresses → prompt-tune inside V2.2 before moving on.
-- Verdict calibration regresses vs V2.1 → roll back to V2.1 and revisit before V2.3.
+- Verdict calibration regresses vs V2.1 → roll back to V2.1 and revisit before advancing.
+
+Decision rule (post-V2.3 rerun on the same frozen 12-case suite):
+
+- 12/12 exact verdict agreement AND CAL-01 Alex Senior lifts to Strong Hire without regressing any of the 11 other cases AND no invented JD-ungrounded gaps AND redundant-gap count drops → V2.3 ships; deterministic verdict remains deferred to V2.4.
+- CAL-01 lifts but any preserved case regresses (Alex Principal, Alex AI, Jordan, Maya, Chris, Taylor, Daniel, Rachel, Morgan, Priya, Jamie) → prompt-tune inside V2.3 before moving on. Do NOT tune to named cases.
+- Verdict calibration regresses vs V2.2 overall → roll back to V2.2 and revisit before V2.4.
 
 ## Next Session
 
-V2.2 is implemented in code (prompt-only) but uncommitted. Recommended first steps in order:
+V2.3 is implemented in code (prompt-only) but uncommitted, on top of an also-uncommitted V2.2 diff (and the earlier V2.2 gap-priority persistence fix). Recommended first steps in order:
 
 1. Review the uncommitted diff in `app/api/analyze/route.ts` for any final tweaks before commit.
-2. Rerun the frozen V1/V2.1 regression suite against V2.2 (unchanged test cases).
-3. Compare V2.1 vs V2.2 on the same metrics listed under Regression strategy, plus:
-   - Thin-evidence inflation rate (Strong Hire on materially thin evidence).
-   - False-gap rate on positive-control candidates who already satisfy the requirement.
-4. Only after V2.2 results are analyzed: decide whether V2.3 deterministic verdict is still needed.
+2. Rerun the frozen 12-case calibration suite against V2.3 (unchanged test cases).
+3. Compare V2.2 vs V2.3 on the same metrics listed under Regression strategy, plus:
+   - CAL-01 (Alex Senior Platform) verdict: expected Strong Hire; must lift from V2.2's Borderline without regressing any preserved case.
+   - JD-ungrounded gap rate: count of gaps whose rationale invokes generalized market expectations rather than the actual JD (e.g. "many Principal PMs have...", "AI is increasingly expected...").
+   - Gap redundancy: count of gap-pairs describing the same underlying missing capability.
+4. Only after V2.3 results are analyzed: decide whether V2.4 deterministic verdict is still needed.
 
 Do NOT add new test cases before rerunning the existing suite.
-Do NOT advance to V2.3 (deterministic verdict) before V2.2 results are evaluated.
+Do NOT tune the prompt to specific named test cases — they are acceptance tests, not tuning targets.
+Do NOT advance to V2.4 (deterministic verdict) before V2.3 results are evaluated.
 
 ---
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Card from "@/app/components/ui/Card";
+import SectionHeader from "@/app/components/ui/SectionHeader";
 
 type TaskStatus = "new" | "in_progress" | "done";
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -116,51 +118,9 @@ export default function Insights({
     return result;
   }
 
-  function renderProgressTrend() {
-    if (!progress?.current_verdict || !progress?.previous_verdict) return null;
-
-    const { current_verdict, previous_verdict } = progress;
-    const VERDICT_SCORE: Record<string, number> = {
-      "Below Bar": 1,
-      "Borderline": 2,
-      "Strong Hire": 3,
-    };
-    const cur = VERDICT_SCORE[current_verdict] ?? 0;
-    const prev = VERDICT_SCORE[previous_verdict] ?? 0;
-
-    let interpretation = "Stable";
-    let toneClass = "bg-gray-50";
-    if (cur > prev) {
-      interpretation = "You're improving";
-      toneClass = "bg-green-50";
-    } else if (cur < prev) {
-      interpretation = "Mixed results (job difficulty may vary)";
-      toneClass = "bg-yellow-50";
-    }
-
-    return (
-      <section className={`border rounded p-5 shadow-sm mb-6 ${toneClass}`}>
-        <h2 className="font-semibold text-lg mb-3">Recent Trend</h2>
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-600">Previous:</div>
-            <div className="font-medium">{previous_verdict}</div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-600">Current:</div>
-            <div className="font-medium">{current_verdict}</div>
-          </div>
-          <div className="font-semibold pt-2">{interpretation}</div>
-          <div className="text-xs text-gray-700 pt-1">
-            To improve your results, focus on reducing your top recurring gap.
-          </div>
-          <div className="text-xs text-gray-500 pt-1">
-            Verdicts can vary based on job difficulty and fit, not just your progress.
-          </div>
-        </div>
-      </section>
-    );
-  }
+  // Recent Trend moved to History — analysis-to-analysis trend belongs
+  // on the history page, not on Overview which is a "where do I stand
+  // right now" surface. See design audit §8/§10.
 
   function renderStrategyProgress() {
     let total = 0;
@@ -230,9 +190,11 @@ export default function Insights({
 
   if (!insights && mode !== "strategy") {
     return (
-      <section className={`border rounded p-5 bg-white shadow-sm mb-6 ${className}`}>
-        <h2 className="font-semibold text-lg mb-3">Career Pattern</h2>
-        <div className="text-sm text-gray-500">Loading insights...</div>
+      <section className={`space-y-3 mb-6 ${className}`}>
+        <SectionHeader title="Career pattern" />
+        <div className="text-[13px] text-[color:var(--color-text-muted)]">
+          Loading insights…
+        </div>
       </section>
     );
   }
@@ -243,17 +205,17 @@ export default function Insights({
   return (
     <>
     {showOverview && insights?.top_signal && insights?.top_gap && (
-      <section className="border rounded p-5 bg-white shadow-sm mb-6">
-        <h2 className="font-semibold text-lg mb-3">Career Summary</h2>
+      <section className="space-y-3 mb-8">
+        <SectionHeader eyebrow="Career summary" title="Where you stand" />
         {showSkeleton ? (
           <div className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
-            <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
+            <div className="h-4 bg-[color:var(--color-surface-elevated)] rounded animate-pulse w-full" />
+            <div className="h-4 bg-[color:var(--color-surface-elevated)] rounded animate-pulse w-3/4" />
           </div>
         ) : !narrativeResolved ? (
           <div className="min-h-[3rem]" />
         ) : (
-          <p className="text-gray-800 leading-7">
+          <p className="text-[15px] leading-[1.7] text-[color:var(--color-text-primary)]">
             {narrative?.career_summary ||
               `You are currently positioned as ${withArticle(lookupArchetype(insights.top_signal.name))}, but you are not yet demonstrating ${lookupMissing(insights.top_gap.name)}.`}
           </p>
@@ -262,122 +224,169 @@ export default function Insights({
     )}
 
     {showOverview && insights && (
-    <section className="border rounded p-5 bg-white shadow-sm mb-6">
-      <h2 className="font-semibold text-lg mb-4">Career Pattern</h2>
+      <section className="space-y-6 mb-8">
+        <SectionHeader
+          title="Career pattern"
+          meta={
+            insights.total_analyses
+              ? `Based on ${insights.total_analyses} analyses`
+              : undefined
+          }
+        />
 
-      <div className="space-y-6">
-        <div className="p-4 border rounded bg-blue-50">
-          <div className="font-semibold mb-2">🧠 Coaching Insight</div>
-          {showSkeleton ? (
-            <div className="space-y-2">
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6" />
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
+        <Card intent="info" padding="lg">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80">
+              Coaching insight
             </div>
-          ) : !narrativeResolved ? (
-            <div className="min-h-[4rem]" />
-          ) : (
-            <div className="text-sm whitespace-pre-line">
-              {narrative?.coaching_insight || getCoachingMessage(insights)}
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-3">
-          {insights.top_gap && (
-            <div className="p-3 border rounded bg-red-50">
-              <div className="text-xs text-gray-500 mb-1">Top recurring gap</div>
-              <div className="font-medium">{insights.top_gap.name}</div>
-              <div className="text-sm text-gray-600">
-                Appeared in {insights.top_gap.count} analyses
+            {showSkeleton ? (
+              <div className="space-y-2">
+                <div className="h-4 bg-[color:var(--color-surface-elevated)] rounded animate-pulse w-full" />
+                <div className="h-4 bg-[color:var(--color-surface-elevated)] rounded animate-pulse w-5/6" />
+                <div className="h-4 bg-[color:var(--color-surface-elevated)] rounded animate-pulse w-2/3" />
               </div>
-            </div>
-          )}
+            ) : !narrativeResolved ? (
+              <div className="min-h-[4rem]" />
+            ) : (
+              <div className="text-[15px] leading-[1.6] whitespace-pre-line text-[color:var(--color-text-primary)]">
+                {narrative?.coaching_insight || getCoachingMessage(insights)}
+              </div>
+            )}
+          </div>
+        </Card>
 
-          {insights.top_gaps?.length > 1 && (
-            <div className="p-3 border rounded bg-white">
-              <div className="text-xs text-gray-500 mb-2">Other recurring gaps</div>
-              <ul className="text-sm space-y-1">
-                {insights.top_gaps.slice(1).map((g: any, i: number) => (
-                  <li key={i} className="flex justify-between">
-                    <span>{g.name}</span>
-                    <span className="text-gray-500">{g.count}</span>
-                  </li>
-                ))}
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+              Recurring gaps
+            </div>
+            {insights.top_gap ? (
+              <ul className="divide-y divide-[color:var(--color-border-subtle)] rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)]">
+                <li className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)] truncate">
+                      {insights.top_gap.name}
+                    </div>
+                    <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+                      Top recurring gap
+                    </div>
+                  </div>
+                  <span className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
+                    {insights.top_gap.count}
+                  </span>
+                </li>
+                {insights.top_gaps
+                  ?.slice(1)
+                  .map((g: any, i: number) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-3 px-4 py-2.5"
+                    >
+                      <span className="text-[14px] text-[color:var(--color-text-secondary)] truncate">
+                        {g.name}
+                      </span>
+                      <span className="text-[13px] text-[color:var(--color-text-muted)]">
+                        {g.count}
+                      </span>
+                    </li>
+                  ))}
               </ul>
-            </div>
-          )}
-
-          {insights.top_signal && (
-            <div className="p-3 border rounded bg-green-50">
-              <div className="text-xs text-gray-500 mb-1">Strongest recurring signal</div>
-              <div className="font-medium">{insights.top_signal.name}</div>
-              <div className="text-sm text-gray-600">
-                Appeared in {insights.top_signal.count} analyses
+            ) : (
+              <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                No recurring gaps yet.
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {insights.top_signals?.length > 1 && (
-            <div className="p-3 border rounded bg-white">
-              <div className="text-xs text-gray-500 mb-2">Other recurring signals</div>
-              <ul className="text-sm space-y-1">
-                {insights.top_signals.slice(1).map((s: any, i: number) => (
-                  <li key={i} className="flex justify-between">
-                    <span>{s.name}</span>
-                    <span className="text-gray-500">{s.count}</span>
-                  </li>
-                ))}
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+              Recurring signals
+            </div>
+            {insights.top_signal ? (
+              <ul className="divide-y divide-[color:var(--color-border-subtle)] rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)]">
+                <li className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)] truncate">
+                      {insights.top_signal.name}
+                    </div>
+                    <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+                      Strongest recurring signal
+                    </div>
+                  </div>
+                  <span className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
+                    {insights.top_signal.count}
+                  </span>
+                </li>
+                {insights.top_signals
+                  ?.slice(1)
+                  .map((s: any, i: number) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-3 px-4 py-2.5"
+                    >
+                      <span className="text-[14px] text-[color:var(--color-text-secondary)] truncate">
+                        {s.name}
+                      </span>
+                      <span className="text-[13px] text-[color:var(--color-text-muted)]">
+                        {s.count}
+                      </span>
+                    </li>
+                  ))}
               </ul>
-            </div>
-          )}
-
-          {(() => {
-            const items = dedupeStrings(insights.recommended_focus).slice(0, 2);
-            const ruleSentence =
-              items.length === 0
-                ? null
-                : items.length === 1
-                  ? `Prioritize ${items[0]}.`
-                  : `Prioritize ${items[0]} first, then ${items[1]}.`;
-            if (showSkeleton) {
-              return (
-                <div className="p-4 border rounded bg-purple-50">
-                  <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
-                  <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
-                </div>
-              );
-            }
-            if (!narrativeResolved) {
-              return (
-                <div className="p-4 border rounded bg-purple-50">
-                  <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
-                  <div className="min-h-[1.5rem]" />
-                </div>
-              );
-            }
-            const sentence = narrative?.recommended_focus || ruleSentence;
-            if (!sentence) return null;
-            return (
-              <div className="p-4 border rounded bg-purple-50">
-                <div className="text-xs text-gray-500 mb-2">Recommended focus</div>
-                <p className="text-sm">{sentence}</p>
+            ) : (
+              <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                No recurring signals yet.
               </div>
-            );
-          })()}
-
-          <div className="text-gray-500 text-sm">
-            Based on {insights.total_analyses} total analyses
+            )}
           </div>
         </div>
-      </div>
-    </section>
+
+        {(() => {
+          const items = dedupeStrings(insights.recommended_focus).slice(0, 2);
+          const ruleSentence =
+            items.length === 0
+              ? null
+              : items.length === 1
+              ? `Prioritize ${items[0]}.`
+              : `Prioritize ${items[0]} first, then ${items[1]}.`;
+          if (showSkeleton) {
+            return (
+              <Card intent="info" padding="lg">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
+                  Recommended focus
+                </div>
+                <div className="h-4 bg-[color:var(--color-surface)]/50 rounded animate-pulse w-2/3" />
+              </Card>
+            );
+          }
+          if (!narrativeResolved) {
+            return (
+              <Card intent="info" padding="lg">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
+                  Recommended focus
+                </div>
+                <div className="min-h-[1.5rem]" />
+              </Card>
+            );
+          }
+          const sentence = narrative?.recommended_focus || ruleSentence;
+          if (!sentence) return null;
+          return (
+            <Card intent="info" padding="lg">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
+                Recommended focus
+              </div>
+              <p className="text-[16px] font-medium leading-[1.5] text-[color:var(--color-text-primary)]">
+                {sentence}
+              </p>
+            </Card>
+          );
+        })()}
+      </section>
     )}
 
-    {showOverview && renderProgressTrend()}
-
     {showStrategy && strategy?.actions?.length > 0 && (
-      <section className="border rounded p-5 bg-white shadow-sm mb-6">
+      <section className="border rounded p-5 bg-white mb-6">
         <h2 className="font-semibold text-lg mb-1">Your Action Plan</h2>
         <p className="text-sm text-gray-600 mb-4">
           This is your prioritized execution plan across target roles. Start with P1 tasks and update each status as you make progress.

@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
+import PageHeader from "@/app/components/ui/PageHeader";
+import SectionHeader from "@/app/components/ui/SectionHeader";
+import Card from "@/app/components/ui/Card";
+import MetaStrip from "@/app/components/ui/MetaStrip";
+import VerdictHero from "@/app/components/ui/VerdictHero";
+import Badge from "@/app/components/ui/Badge";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +37,14 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     .single();
 
   if (error || !analysis) {
-    return <div>Analysis not found</div>;
+    return (
+      <div className="mx-auto max-w-[48rem]">
+        <PageHeader
+          title="Analysis not found"
+          description="This analysis is not available for the active career profile."
+        />
+      </div>
+    );
   }
 
   const { data: plan } = await supabase
@@ -42,150 +55,176 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     .limit(1)
     .single();
 
-  const data = analysis.raw_json;
+  const data = analysis.raw_json as {
+    core_verdict?: string;
+    positioning_summary?: string;
+    signals?: Array<{
+      signal_name?: string;
+      name?: string;
+      score?: number;
+      rationale?: string;
+      reasoning?: string;
+      evidence?: string[];
+    }>;
+    gaps?: Array<{
+      gap_title?: string;
+      title?: string;
+      gap_description?: string;
+      description?: string;
+      recommended_fix?: string;
+      severity?: "High" | "Medium" | "Low" | string;
+    }>;
+    plan?: { next_best_action?: string };
+    company_name?: string;
+  } | null;
+
+  const verdict = data?.core_verdict;
+  const positioningSummary = analysis.summary || data?.positioning_summary;
+  const nextBestAction = plan?.next_best_action || data?.plan?.next_best_action;
+
+  const shortId =
+    typeof analysis.id === "string" ? analysis.id.slice(0, 8) : analysis.id;
+  const createdLabel = analysis.created_at
+    ? new Date(analysis.created_at).toLocaleDateString()
+    : "—";
 
   return (
-    <>
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Analysis</h1>
-        <p className="text-sm text-gray-500">
-          Review your fit, biggest gaps, and the highest-leverage next steps.
-        </p>
-      </div>
+    <div className="mx-auto max-w-[48rem] space-y-8">
+      <PageHeader
+        eyebrow={`Analysis #${shortId}`}
+        title="Analysis"
+        description="Review your fit, biggest gaps, and the highest-leverage next steps."
+      />
 
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Analysis Context</h2>
-        <div className="text-sm text-gray-700 space-y-1">
-          <div>
-            <span className="text-gray-500">Analysis:</span>{" "}
-            <span className="font-medium">
-              #{typeof analysis.id === "string" ? analysis.id.slice(0, 8) : analysis.id}
-            </span>
-          </div>
-          {analysis.created_at && (
-            <div>
-              <span className="text-gray-500">Created:</span>{" "}
-              <span className="font-medium">
-                {new Date(analysis.created_at).toLocaleDateString()}
-              </span>
+      <MetaStrip
+        items={[
+          { label: "Created", value: createdLabel },
+          {
+            label: "Resume",
+            value: analysis.resume_name || "Latest uploaded resume",
+          },
+          {
+            label: "Target job",
+            value:
+              analysis.job_title ||
+              data?.company_name ||
+              "Pasted job description",
+          },
+        ]}
+      />
+
+      <VerdictHero verdict={verdict} summary={positioningSummary} />
+
+      {nextBestAction && (
+        <Card intent="info" padding="lg">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80">
+              Job-specific guidance
             </div>
-          )}
-          <div>
-            <span className="text-gray-500">Resume:</span>{" "}
-            <span className="font-medium">
-              {analysis.resume_name || "Latest uploaded resume"}
-            </span>
+            <p className="text-[15px] leading-[1.6] text-[color:var(--color-text-primary)]">
+              {nextBestAction}
+            </p>
           </div>
-          <div>
-            <span className="text-gray-500">Target job:</span>{" "}
-            <span className="font-medium">
-              {analysis.job_title || data?.company_name || "Pasted job description"}
-            </span>
+        </Card>
+      )}
+
+      <section className="space-y-4">
+        <SectionHeader
+          title="Strength signals"
+          meta={
+            data?.signals?.length
+              ? `${data.signals.length} signals`
+              : undefined
+          }
+        />
+
+        {data?.signals?.length ? (
+          <div className="space-y-3">
+            {data.signals.map((s, i) => {
+              const score = Number(s.score ?? 0);
+              const scoreVariant =
+                score >= 4 ? "success" : score === 3 ? "caution" : "neutral";
+              return (
+                <Card key={i} padding="md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)] min-w-0">
+                      {s.signal_name || s.name}
+                    </div>
+                    <Badge variant={scoreVariant}>{score}/5</Badge>
+                  </div>
+
+                  <p className="text-[14px] leading-[1.6] text-[color:var(--color-text-secondary)] mt-2">
+                    {s.rationale || s.reasoning}
+                  </p>
+
+                  {s.evidence && s.evidence.length > 0 && (
+                    <ul className="list-disc pl-5 mt-3 text-[13px] text-[color:var(--color-text-secondary)] space-y-1">
+                      {s.evidence.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              );
+            })}
           </div>
-        </div>
+        ) : (
+          <div className="text-[13px] text-[color:var(--color-text-muted)]">
+            No strength signals were returned for this analysis.
+          </div>
+        )}
       </section>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
-    <h2 className="font-semibold text-lg mb-2">Verdict</h2>
+      <section className="space-y-4">
+        <SectionHeader
+          title="Key gaps"
+          meta={data?.gaps?.length ? `${data.gaps.length} gaps` : "0 gaps"}
+        />
 
-    <div className="flex items-center justify-between">
-      <div className="text-xl font-bold">
-        {data?.core_verdict || "No verdict available"}
-      </div>
-
-      <div
-        className={`px-3 py-1 rounded text-sm font-medium ${
-          data?.core_verdict === "Strong Hire"
-            ? "bg-green-100 text-green-800"
-            : data?.core_verdict === "Borderline"
-            ? "bg-yellow-100 text-yellow-800"
-            : "bg-red-100 text-red-800"
-        }`}
-      >
-        Hiring Signal
-      </div>
+        {data?.gaps && data.gaps.length > 0 ? (
+          <div className="space-y-3">
+            {data.gaps.map((g, i) => {
+              const sev = String(g.severity || "").toLowerCase();
+              const dotColor =
+                sev === "high"
+                  ? "bg-[color:var(--color-danger-text)]"
+                  : sev === "medium"
+                  ? "bg-[color:var(--color-caution-text)]"
+                  : "bg-[color:var(--color-text-muted)]";
+              return (
+                <Card key={i} padding="md">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`}
+                      aria-label={`Severity ${g.severity || "unspecified"}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)]">
+                        {g.gap_title || g.title || `Gap ${i + 1}`}
+                      </div>
+                      <p className="text-[14px] leading-[1.6] text-[color:var(--color-text-secondary)] mt-1">
+                        {g.gap_description || g.description}
+                      </p>
+                      {g.recommended_fix && (
+                        <p className="text-[13px] text-[color:var(--color-text-muted)] mt-2">
+                          <span className="font-semibold text-[color:var(--color-text-secondary)]">
+                            Suggested fix ·{" "}
+                          </span>
+                          {g.recommended_fix}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-[13px] text-[color:var(--color-text-muted)]">
+            No material gaps for this role.
+          </div>
+        )}
+      </section>
     </div>
-  </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Positioning Summary</h2>
-        <p className="text-gray-800 leading-7">
-          {analysis.summary || data?.positioning_summary}
-        </p>
-      </section>
-
-      <section className="border rounded p-5 bg-green-50 shadow-sm">
-        <h2 className="font-semibold text-lg mb-3">Job-specific guidance</h2>
-        <p className="text-gray-900 font-medium leading-7">
-          {plan?.next_best_action || data?.plan?.next_best_action}
-        </p>
-      </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-4">Strength Signals</h2>
-
-        <div className="space-y-3">
-          {data?.signals?.map((s: any, i: number) => (
-            <div key={i} className="border p-4 rounded bg-gray-50">
-              <div className="flex items-start justify-between gap-3">
-                <div className="font-medium">
-                  {s.signal_name || s.name}
-                </div>
-
-                <div
-                  className={`text-sm px-2 py-1 rounded font-medium ${
-                    s.score >= 4
-                      ? "bg-green-100 text-green-800"
-                      : s.score === 3
-                      ? "bg-yellow-100 text-yellow-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {s.score}/5
-                </div>
-              </div>
-
-              <div className="text-sm text-gray-700 mt-2 leading-6">
-                {s.rationale || s.reasoning}
-              </div>
-
-              {s.evidence?.length > 0 && (
-                <ul className="list-disc pl-5 mt-2 text-sm text-gray-600 space-y-1">
-                  {s.evidence.map((item: string, idx: number) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm">
-        <h2 className="font-semibold text-lg mb-4">Key Gaps</h2>
-
-        <div className="space-y-3">
-          {data?.gaps?.map((g: any, i: number) => (
-            <div key={i} className="border p-4 rounded bg-gray-50">
-              <div className="font-medium">
-                {g.gap_title || g.title || `Gap ${i + 1}`}
-              </div>
-
-              <div className="text-sm text-gray-700 mt-2 leading-6">
-                {g.gap_description || g.description}
-              </div>
-
-              {g.recommended_fix && (
-                <div className="text-sm text-gray-600 mt-2">
-                  <span className="font-medium">Suggested fix:</span>{" "}
-                  {g.recommended_fix}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-    </>
   );
 }

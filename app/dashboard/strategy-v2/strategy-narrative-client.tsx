@@ -54,7 +54,7 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
     <>
       <h1 className="text-2xl font-bold">Strategy</h1>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
+      <section className="border rounded p-5 bg-white">
         <h2 className="font-semibold text-lg mb-3">Target Positioning</h2>
         {showSkeleton ? (
           <div className="space-y-2">
@@ -71,7 +71,7 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
         )}
       </section>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
+      <section className="border rounded p-5 bg-white">
         <h2 className="font-semibold text-lg mb-3">Role Targeting Guidance</h2>
         {showSkeleton ? (
           <div className="space-y-4">
@@ -108,7 +108,7 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
         )}
       </section>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
+      <section className="border rounded p-5 bg-white">
         <h2 className="font-semibold text-lg mb-3">Positioning Tradeoffs</h2>
         {showSkeleton ? (
           <div className="space-y-2">
@@ -125,7 +125,7 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
         )}
       </section>
 
-      <section className="border rounded p-5 bg-blue-50 shadow-sm">
+      <section className="border rounded p-5 bg-blue-50">
         <h2 className="font-semibold text-lg mb-3">Narrative to Tell</h2>
         {showSkeleton ? (
           <div className="space-y-2">
@@ -140,7 +140,7 @@ export default function StrategyNarrativeClient({ fallback }: { fallback: Fallba
         )}
       </section>
 
-      <section className="border rounded p-5 bg-white shadow-sm">
+      <section className="border rounded p-5 bg-white">
         <h2 className="font-semibold text-lg mb-3">Risks</h2>
         {showSkeleton ? (
           <div className="space-y-2">

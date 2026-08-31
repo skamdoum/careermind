@@ -1,8 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppShell from "@/app/components/app-shell";
+import PageHeader from "@/app/components/ui/PageHeader";
+import SectionHeader from "@/app/components/ui/SectionHeader";
+import Card from "@/app/components/ui/Card";
+import Badge from "@/app/components/ui/Badge";
+import EmptyState from "@/app/components/ui/EmptyState";
+import DropZone from "@/app/components/ui/DropZone";
+import VerdictHero from "@/app/components/ui/VerdictHero";
 
 export default function AnalyzePage() {
   const supabase = createClient();
@@ -10,93 +18,87 @@ export default function AnalyzePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedResume, setUploadedResume] = useState<any>(null);
   const [latestResume, setLatestResume] = useState<any>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
-  const [status, setStatus] = useState("No request yet");
+  const [status, setStatus] = useState("Ready to analyze your profile");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [jobInputs, setJobInputs] = useState(["", "", ""]);
-  const [compareResults, setCompareResults] = useState<any[]>([]);
-  const [comparing, setComparing] = useState(false);
 
   useEffect(() => {
-  async function loadUserAndResume() {
-    // 👉 RESET UI STATE FIRST
-    setResult(null);
-    setStatus("Ready to analyze your profile");
+    async function loadUserAndResume() {
+      setResult(null);
+      setStatus("Ready to analyze your profile");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    console.log("Loaded user:", user, userError);
-
-    if (!user) {
-      setUserId(null);
-      return;
-    }
-
-    setUserId(user.id);
-
-    const res = await fetch("/api/resumes/latest");
-    const data = await res.json();
-    console.log("FRONTEND RESULT:", data);
-
-    if (!res.ok) {
-      if (data.data?.code === "LIMIT_REACHED") {
-        setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
+      if (!user) {
+        setUserId(null);
         return;
       }
 
-      setStatus(data.error || "Analyze failed");
-      return;
+      setUserId(user.id);
+
+      const res = await fetch("/api/resumes/latest");
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.data?.code === "LIMIT_REACHED") {
+          setStatus("You've reached the free analysis limit for the beta.");
+          return;
+        }
+
+        setStatus(data.error || "Failed to load your latest resume");
+        return;
+      }
+
+      if (data?.data) {
+        setLatestResume(data.data);
+      }
     }
 
-    // 👉 SET LATEST RESUME IF EXISTS
-    if (data?.data) {
-      setLatestResume(data.data);
-    }
-  }
+    loadUserAndResume();
+  }, [supabase]);
 
-  loadUserAndResume();
-}, []);
-
-  async function handleUploadResume() {
-    if (!userId || !selectedFile) {
-      setStatus("Select a file first");
+  // Auto-upload as soon as the user chooses a file. Picking a file IS
+  // the commit — no separate button. Prevents the analysis flow from
+  // ever running against a stale "latest" resume simply because the
+  // user forgot to click a second button.
+  async function uploadResumeFile(file: File) {
+    if (!userId) {
+      setUploadError("You must be logged in to upload a resume.");
       return;
     }
 
     setUploading(true);
-    setStatus("Uploading resume...");
+    setUploadError(null);
+    setStatus("Uploading resume…");
 
     try {
-      const fileExt = selectedFile.name.split(".").pop();
+      const fileExt = file.name.split(".").pop();
       const filePath = `${userId}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from("resumes")
-        .upload(filePath, selectedFile, {
+        .upload(filePath, file, {
           upsert: false,
-          contentType: selectedFile.type,
+          contentType: file.type,
         });
 
-      if (uploadError) {
-        throw uploadError;
+      if (storageError) {
+        throw storageError;
       }
 
       const res = await fetch("/api/resumes", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filePath,
-          fileName: selectedFile.name,
-          mimeType: selectedFile.type,
+          fileName: file.name,
+          mimeType: file.type,
         }),
       });
 
@@ -108,384 +110,272 @@ export default function AnalyzePage() {
 
       setUploadedResume(data.data);
       setLatestResume(data.data);
-      setStatus("Resume uploaded successfully");
+      setStatus("Resume uploaded");
     } catch (error: any) {
       console.error(error);
-      setStatus(error.message || "Upload failed");
+      setUploadError(error.message || "Upload failed");
+      setStatus("Upload failed");
     } finally {
       setUploading(false);
     }
   }
 
-async function handleAnalyze() {
-  if (!userId) {
-    setStatus("You must be logged in");
-    return;
-  }
-
-  setLoading(true);
-  setStatus("Analyzing your profile... this may take a few seconds.");
-  setResult(null);
-
-  try {
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        userId,
-        resumeText,
-        jobDescription,
-        targetRole: "PM",
-        targetLevel: "Senior",
-        // The server always resolves the actual file from this id against
-        // the user + active career profile. `latestResume` metadata like
-        // file_path / file_name from the client is deliberately not sent.
-        resume_id: latestResume?.id ?? null,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      if (data.data?.code === "LIMIT_REACHED") {
-        setStatus("You’ve reached the free limit (3 analyses). Upgrade to continue.");
-        return;
-      }
-
-      setStatus(data.error || "Analyze failed");
-      setResult({ error: data.error || "Analyze failed" });
+  async function handleAnalyze() {
+    if (!userId) {
+      setStatus("You must be logged in");
       return;
     }
 
-    setStatus("Analysis complete");
-    console.log("RESULT SENT TO UI:", data.data?.result);
-    setResult(data.data?.result);
-  } catch (error) {
-    console.error(error);
-    setStatus("Request failed");
-    setResult({ error: "Request failed" });
-  } finally {
-    setLoading(false);
-  }
-}
+    setLoading(true);
+    setStatus("Analyzing your profile… this may take up to a minute.");
+    setResult(null);
 
-  async function handleCompare() {
-  const filteredJobs = jobInputs.filter((j) => j.trim() !== "");
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          resumeText,
+          jobDescription,
+          targetRole: "PM",
+          targetLevel: "Senior",
+          // The server always resolves the actual file from this id
+          // against the user + active career profile. Client-supplied
+          // file_path / file_name metadata is deliberately not sent.
+          resume_id: latestResume?.id ?? null,
+        }),
+      });
 
-  if ((!latestResume && !resumeText) || filteredJobs.length < 2) {
-    setStatus("Upload a resume (or paste resume text) and provide at least 2 job descriptions");
-    return;
-  }
+      const data = await res.json();
 
-  setComparing(true);
-  setStatus("Comparing jobs...");
-  setCompareResults([]);
+      if (!res.ok) {
+        if (data.data?.code === "LIMIT_REACHED") {
+          setStatus("You've reached the free analysis limit for the beta.");
+          return;
+        }
 
-  try {
-    const res = await fetch("/api/compare", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        resumeText,
-        latestResume,
-        jobDescriptions: filteredJobs,
-      }),
-    });
+        setStatus(data.error || "Analyze failed");
+        setResult({ error: data.error || "Analyze failed" });
+        return;
+      }
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || "Compare failed");
+      setStatus("Analysis complete");
+      setResult(data.data?.result);
+    } catch (error) {
+      console.error(error);
+      setStatus("Request failed");
+      setResult({ error: "Request failed" });
+    } finally {
+      setLoading(false);
     }
-
-    setCompareResults(data.data || []);
-    setStatus("Job comparison complete");
-  } catch (error: any) {
-    console.error(error);
-    setStatus(error.message || "Compare failed");
-  } finally {
-    setComparing(false);
-  }
-}
-
-function getRecommendation(results: any[]) {
-  if (!results || results.length === 0) return null;
-
-  const top = results[0];
-  const weak = results.find((r) => r.core_verdict === "Below Bar");
-
-  let message = "";
-
-  if (top) {
-    message += `Focus on ${top.company_name || "the top-ranked role"} first — strongest fit.\n`;
   }
 
-  const borderline = results.find((r) => r.core_verdict === "Borderline");
+  const canAnalyze =
+    !loading && !!userId && (!!latestResume || !!resumeText) && !!jobDescription;
 
-  if (borderline) {
-    message += `\n${borderline.company_name || "Another role"} is viable but requires improvement.`;
-  }
-
-  if (weak) {
-    message += `\n\nAvoid ${weak.company_name || "this role"} for now — below the bar based on current profile.`;
-  }
-
-  return message;
-}
   return (
-    <AppShell>
-  <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Analyze Your Fit</h1>
-        <p className="text-gray-600 max-w-2xl">
-          Upload your resume, paste a target job description, and get a structured
-          evaluation of your strengths, biggest gaps, and highest-leverage next steps.
-        </p>
-      </div>
-
-      <section className="border rounded p-5 bg-white shadow-sm space-y-4">
-        <div>
-          <h2 className="font-semibold text-lg">Step 1 — Upload Resume</h2>
-          <p className="text-sm text-gray-600">
-            Use your latest uploaded resume or upload a new version.
-          </p>
-        </div>
-
-        {latestResume ? (
-          <div className="p-3 bg-blue-50 border rounded">
-            <div className="text-xs text-gray-600">Using latest resume</div>
-            <div className="font-medium">{latestResume.file_name}</div>
-          </div>
-        ) : (
-          <div className="text-sm text-gray-500">No resume uploaded yet</div>
-        )}
-
-        <input
-          type="file"
-          accept=".pdf,.doc,.docx,.txt"
-          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-        />
-
-        <div className="flex gap-2">
-          <button
-            className="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
-            onClick={handleUploadResume}
-            disabled={!selectedFile || uploading}
-          >
-            {uploading ? "Uploading..." : "Upload Resume"}
-          </button>
-        </div>
-
-        {uploadedResume && (
-          <div className="text-sm text-green-700">
-            Uploaded: {uploadedResume.file_name}
-          </div>
-        )}
-
-        <div className="text-xs text-gray-500">
-          You can also paste resume text below as a fallback, but uploaded resume is preferred.
-        </div>
-      </section>
-
-      <section className="border rounded p-5 bg-white shadow-sm space-y-4">
-        <div>
-          <h2 className="font-semibold text-lg">Step 2 — Target Role</h2>
-          <p className="text-sm text-gray-600">
-            Paste the job description for the role you want to evaluate against.
-          </p>
-        </div>
-
-        <textarea
-          className="w-full border rounded p-3 min-h-[220px]"
-          placeholder="Paste job description here"
-          value={jobDescription}
-          onChange={(e) => setJobDescription(e.target.value)}
-        />
-      </section>
-
-<section className="border rounded p-5 bg-white shadow-sm space-y-4">
-  <div>
-    <h2 className="font-semibold text-lg">Compare Multiple Jobs</h2>
-    <p className="text-sm text-gray-600">
-      Paste 2–3 job descriptions to see where you are strongest and where to focus.
-    </p>
-  </div>
-
-  <div className="space-y-3">
-    {jobInputs.map((job, i) => (
-      <textarea
-        key={i}
-        value={job}
-        onChange={(e) => {
-          const updated = [...jobInputs];
-          updated[i] = e.target.value;
-          setJobInputs(updated);
-        }}
-        className="w-full border rounded p-3 min-h-[140px]"
-        placeholder={`Job description ${i + 1}`}
+    <AppShell width="standard">
+      <PageHeader
+        title="Analyze Your Fit"
+        description="Upload your resume, paste a target job description, and get a structured evaluation of your strengths, biggest gaps, and highest-leverage next steps."
       />
-    ))}
-  </div>
 
-  <button
-    onClick={handleCompare}
-    className="px-5 py-3 rounded bg-black text-white disabled:opacity-50 w-full"
-    disabled={comparing || (!latestResume && !resumeText)}
-  >
-    {comparing ? "Comparing..." : "Compare Jobs"}
-  </button>
-
-  {compareResults.length > 0 && (
-    <div className="space-y-3 pt-2">
-      <h3 className="font-semibold">Comparison Results</h3>
-
-      <div className="border p-4 rounded bg-blue-50">
-  <div className="font-semibold mb-2">🎯 Recommendation</div>
-  <div className="text-sm whitespace-pre-line">
-    {getRecommendation(compareResults)}
-  </div>
-</div>
-
-      {compareResults.map((r, i) => (
-        <div key={i} className="border p-4 rounded bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div className="font-medium">
-              #{i + 1} — {r.company_name || `Job ${i + 1}`}
-            </div>
-
-            <div
-              className={`px-2 py-1 rounded text-sm font-medium ${
-                r.core_verdict === "Strong Hire"
-                  ? "bg-green-100 text-green-800"
-                  : r.core_verdict === "Borderline"
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-red-100 text-red-800"
-              }`}
-            >
-              {r.core_verdict}
-            </div>
-          </div>
-
-          <div className="text-sm text-gray-600 mt-1">
-            Score: {r.score}/5
-          </div>
-
-          <div className="text-sm text-gray-700 mt-2">
-            {r.reasoning}
-          </div>
-        </div>
-      ))}
-    </div>
-  )}
-</section>
-
-      <section className="border rounded p-5 bg-white shadow-sm space-y-4">
-        <div>
-          <h2 className="font-semibold text-lg">Optional Fallback</h2>
-          <p className="text-sm text-gray-600">
-            If you do not want to rely on the uploaded resume, you can paste resume text here.
-          </p>
-        </div>
-
-        <textarea
-          className="w-full border rounded p-3 min-h-[180px]"
-          placeholder="Optional: paste resume text"
-          value={resumeText}
-          onChange={(e) => setResumeText(e.target.value)}
-        />
-      </section>
-
-<section className="border rounded p-5 bg-white shadow-sm space-y-4">
-  <div>
-    <h2 className="font-semibold text-lg">Step 3 — Analyze</h2>
-    <p className="text-sm text-gray-600">
-      CareerMind will evaluate fit, identify gaps, and generate an action plan.
-    </p>
-  </div>
-
-  <button
-    className="px-5 py-3 rounded bg-black text-white disabled:opacity-50 w-full"
-    onClick={handleAnalyze}
-    disabled={loading || !userId || (!latestResume && !resumeText) || !jobDescription}
-  >
-    {loading ? "Analyzing..." : "Run Analysis"}
-  </button>
-
-<div className="mt-3 space-y-3">
-  <div className="text-sm text-gray-500">
-    Free tier includes up to 3 analyses.
-  </div>
-
-  {status?.toLowerCase().includes("limit") && (
-    <div className="p-4 border rounded bg-yellow-50">
-      <div className="font-semibold mb-1">Free limit reached</div>
-      <div className="text-sm text-gray-700 mb-3">
-        You’ve used your 3 free analyses. Upgrade for unlimited analyses and deeper ongoing career insights.
+      <div className="text-[13px] text-[color:var(--color-text-muted)]">
+        Analyzing for a specific target role?{" "}
+        <Link
+          href="/dashboard/goals"
+          className="text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] underline underline-offset-2"
+        >
+          Start from your career goal →
+        </Link>
       </div>
 
-      <button
-        className="px-4 py-2 bg-black text-white rounded"
-        onClick={() => alert("Upgrade flow coming soon")}
-      >
-        Upgrade
-      </button>
-    </div>
-  )}
-</div>
-
-<div className="border rounded p-3 bg-gray-50 text-sm">
-  {status || "Ready to analyze your profile"}
-</div>
-</section>
-
-      {result && (
+      <Card padding="lg">
         <div className="space-y-4">
-          <section className="border rounded p-5 bg-white shadow-sm">
-            <h2 className="font-semibold text-lg mb-3">Positioning Summary</h2>
-            <p className="text-gray-800 leading-7">
-              {result.positioning_summary}
-            </p>
-          </section>
+          <SectionHeader
+            eyebrow="Step 1"
+            title="Resume"
+            description="Choose a file and it uploads automatically. To swap, just pick a different file."
+          />
 
-          <section className="border rounded p-5 bg-green-50 shadow-sm">
-            <h2 className="font-semibold text-lg mb-3">Next Best Action</h2>
-            <p className="text-gray-900 font-medium leading-7">
-              {result.plan?.next_best_action}
-            </p>
-          </section>
+          {latestResume ? (
+            <div className="rounded-[6px] bg-[color:var(--color-accent-ink-tint)] px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+                Current resume
+              </div>
+              <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)] mt-0.5">
+                {latestResume.file_name}
+              </div>
+            </div>
+          ) : (
+            <div className="text-[13px] text-[color:var(--color-text-muted)]">
+              No resume uploaded yet.
+            </div>
+          )}
 
-          <section className="border rounded p-5 bg-white shadow-sm">
-            <h2 className="font-semibold text-lg mb-3">Top Gaps</h2>
-            <div className="space-y-3">
-              {result.gaps?.slice(0, 3).map((gap: any, i: number) => (
-                <div key={i} className="border p-3 rounded bg-gray-50">
-                  <div className="font-medium">
+          <DropZone
+            accept=".pdf,.doc,.docx,.txt"
+            disabled={uploading || !userId}
+            onFile={(f) => uploadResumeFile(f)}
+            label={
+              latestResume
+                ? "Replace with a different file"
+                : "Drop a file or click to upload"
+            }
+            hint="PDF, DOC, DOCX, or TXT"
+          />
+
+          {uploading && (
+            <div className="text-[13px] text-[color:var(--color-text-secondary)]">
+              Uploading…
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="text-[13px] text-[color:var(--color-danger-text)]">
+              {uploadError}
+            </div>
+          )}
+
+          {uploadedResume && !uploading && !uploadError && (
+            <div className="text-[13px] text-[color:var(--color-success-text)]">
+              Uploaded: {uploadedResume.file_name}
+            </div>
+          )}
+
+          <details className="text-[13px] text-[color:var(--color-text-secondary)]">
+            <summary className="cursor-pointer select-none">
+              Or paste resume text as a fallback
+            </summary>
+            <p className="text-[12px] text-[color:var(--color-text-muted)] mt-2">
+              Uploaded file is preferred. Only use this if you cannot upload a file.
+            </p>
+            <textarea
+              className="mt-2 w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-3 min-h-[140px] text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
+              placeholder="Paste resume text"
+              value={resumeText}
+              onChange={(e) => setResumeText(e.target.value)}
+            />
+          </details>
+        </div>
+      </Card>
+
+      <Card padding="lg">
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Step 2"
+            title="Target role"
+            description="Paste the job description for the role you want to evaluate against."
+          />
+          <textarea
+            className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-3 min-h-[220px] text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
+            placeholder="Paste job description here"
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+          />
+        </div>
+      </Card>
+
+      <EmptyState
+        title={
+          <span className="flex items-center justify-center gap-2">
+            <span>Compare multiple roles</span>
+            <Badge variant="neutral">Coming soon</Badge>
+          </span>
+        }
+        description="Weigh 2–3 target roles against your resume and career profile in one pass. Ships with a future release — for now, analyze roles one at a time from your career goals."
+      />
+
+      <Card padding="lg">
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Step 3"
+            title="Analyze"
+            description="CareerMind will evaluate fit, identify gaps, and generate an action plan."
+          />
+
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={!canAnalyze}
+            className={
+              "w-full rounded-[6px] px-5 py-3 text-[14px] font-medium transition " +
+              (canAnalyze
+                ? "bg-[color:var(--color-accent-ink)] text-white hover:opacity-90"
+                : "bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-muted)] cursor-not-allowed")
+            }
+          >
+            {loading ? "Analyzing…" : "Run Analysis"}
+          </button>
+
+          <div className="text-[12px] text-[color:var(--color-text-muted)]">
+            Free during beta.
+          </div>
+
+          {status?.toLowerCase().includes("limit") && (
+            <Card intent="caution" padding="md">
+              <div className="text-[14px] font-semibold">Free limit reached</div>
+              <div className="text-[13px] mt-1">
+                You&apos;ve hit the free analysis limit for the beta. Reach out
+                to your CareerMind contact if you need it raised for testing.
+              </div>
+            </Card>
+          )}
+
+          <div className="rounded-[6px] bg-[color:var(--color-surface-elevated)] px-4 py-3 text-[13px] text-[color:var(--color-text-secondary)]">
+            {status || "Ready to analyze your profile"}
+          </div>
+        </div>
+      </Card>
+
+      {result && !result.error && (
+        <div className="space-y-6">
+          <VerdictHero
+            verdict={result.core_verdict}
+            summary={result.positioning_summary}
+          />
+
+          {result.plan?.next_best_action && (
+            <Card intent="info" padding="lg">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
+                Next best action
+              </div>
+              <p className="text-[15px] leading-[1.6] text-[color:var(--color-text-primary)]">
+                {result.plan.next_best_action}
+              </p>
+            </Card>
+          )}
+
+          {result.gaps && result.gaps.length > 0 && (
+            <section className="space-y-3">
+              <SectionHeader title="Top gaps" />
+              {result.gaps.slice(0, 3).map((gap: any, i: number) => (
+                <Card key={i} padding="md">
+                  <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)]">
                     {gap.gap_title || `Gap ${i + 1}`}
                   </div>
-                  <div className="text-sm text-gray-700 mt-1">
+                  <p className="text-[14px] leading-[1.6] text-[color:var(--color-text-secondary)] mt-1">
                     {gap.gap_description}
-                  </div>
-                </div>
+                  </p>
+                </Card>
               ))}
-            </div>
-          </section>
+            </section>
+          )}
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => (window.location.href = "/dashboard")}
-              className="px-4 py-2 bg-black text-white rounded"
+          <div className="flex gap-3">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
             >
-              Go to Dashboard
-            </button>
-
+              Go to dashboard
+            </Link>
             <button
+              type="button"
               onClick={() => setResult(null)}
-              className="px-4 py-2 border rounded"
+              className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-4 py-2 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
             >
-              Run Another Analysis
+              Run another analysis
             </button>
           </div>
         </div>

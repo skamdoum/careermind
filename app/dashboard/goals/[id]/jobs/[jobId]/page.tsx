@@ -403,7 +403,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
           )}
 
           {job.source_url && (
-            <section className="border rounded p-5 bg-white shadow-sm">
+            <section className="border rounded p-5 bg-white">
               <h2 className="font-semibold text-lg mb-2">Source</h2>
               <a
                 href={job.source_url}
@@ -416,7 +416,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             </section>
           )}
 
-          <section className="border rounded p-5 bg-white shadow-sm">
+          <section className="border rounded p-5 bg-white">
             <h2 className="font-semibold text-lg mb-3">Analysis history</h2>
 
             {analyses === null && !analysesError && (
@@ -473,7 +473,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             )}
           </section>
 
-          <section className="border rounded p-5 bg-white shadow-sm">
+          <section className="border rounded p-5 bg-white">
             <h2 className="font-semibold text-lg mb-3">Job description</h2>
             <pre className="text-sm text-gray-800 leading-6 whitespace-pre-wrap font-sans">
               {job.jd_text}

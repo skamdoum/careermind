@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import PageHeader from "@/app/components/ui/PageHeader";
+import Card from "@/app/components/ui/Card";
+import Badge from "@/app/components/ui/Badge";
+import EmptyState from "@/app/components/ui/EmptyState";
 
 type CareerGoal = {
   id: string;
@@ -66,86 +70,93 @@ function GoalsListContent() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Career Goals</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            The direction you&apos;re targeting. Each goal anchors the jobs and
-            analyses you compare against it.
-          </p>
-        </div>
-
-        {goals && goals.length > 0 && (
-          <Link
-            href="/dashboard/goals/new"
-            className="px-3 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 whitespace-nowrap"
-          >
-            New career goal
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title="Career Goals"
+        description="The direction you're targeting. Each goal anchors the jobs and analyses you compare against it."
+        action={
+          goals && goals.length > 0 ? (
+            <Link
+              href="/dashboard/goals/new"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+            >
+              New career goal
+            </Link>
+          ) : null
+        }
+      />
 
       {isLoading && (
-        <div className="text-sm text-gray-500">Loading career goals…</div>
+        <div className="text-sm text-[color:var(--color-text-muted)]">
+          Loading career goals…
+        </div>
       )}
 
       {error && (
-        <div className="border border-red-200 bg-red-50 text-red-800 rounded p-4 text-sm">
-          {error}
-        </div>
+        <Card intent="danger" padding="md">
+          <div className="text-sm">{error}</div>
+        </Card>
       )}
 
       {isEmpty && (
-        <section className="border border-dashed rounded p-8 bg-white text-center space-y-4">
-          <div className="space-y-1">
-            <h2 className="font-semibold text-lg">No career goals yet</h2>
-            <p className="text-sm text-gray-600">
-              Set a goal to anchor your analyses against a specific direction —
-              level, function, and the roles you&apos;re targeting.
-            </p>
-          </div>
-          <Link
-            href="/dashboard/goals/new"
-            className="inline-block px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800"
-          >
-            Create your first career goal
-          </Link>
-        </section>
+        <EmptyState
+          title="No career goals yet"
+          description="Set a goal to anchor your analyses against a specific direction — level, function, and the roles you're targeting."
+          action={
+            <Link
+              href="/dashboard/goals/new"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+            >
+              Create your first career goal
+            </Link>
+          }
+        />
       )}
 
       {goals && goals.length > 0 && (
-        <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
           {goals.map((g) => (
             <Link
               key={g.id}
               href={`/dashboard/goals/${g.id}`}
-              className="block border rounded p-4 hover:bg-gray-50"
+              className="block rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-5 hover:border-[color:var(--color-text-primary)] transition-colors"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="font-medium text-base">{g.title}</div>
-                <span
-                  className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
-                    g.status === "active"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-gray-100 text-gray-700"
-                  }`}
-                >
+                <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)] min-w-0">
+                  {g.title}
+                </div>
+                <Badge variant={g.status === "active" ? "success" : "neutral"}>
                   {g.status}
-                </span>
+                </Badge>
               </div>
 
-              <div className="text-sm text-gray-600 mt-1">
+              <div className="text-[13px] text-[color:var(--color-text-secondary)] mt-2">
                 {[g.target_level, g.target_function].filter(Boolean).join(" · ") ||
                   "No target level or function set"}
               </div>
 
-              <div className="text-xs text-gray-500 mt-2">
+              <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)] mt-3">
                 Created {new Date(g.created_at).toLocaleDateString()}
               </div>
             </Link>
           ))}
         </div>
       )}
+
+      {/*
+        Secondary discovery link for /analyze. Run Analysis is no longer in
+        the primary nav — the V1 flow is Goals → Target Role → Analyze — but
+        the standalone route stays reachable here for one-off analyses
+        (e.g. regression-test runs).
+      */}
+      <div className="pt-2 text-[13px] text-[color:var(--color-text-muted)]">
+        Need a quick one-off analysis?{" "}
+        <Link
+          href="/analyze"
+          className="text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] underline underline-offset-2"
+        >
+          Run analysis without a career goal →
+        </Link>
+      </div>
     </>
   );
 }
@@ -154,7 +165,9 @@ export default function GoalsListPage() {
   return (
     <Suspense
       fallback={
-        <div className="text-sm text-gray-500">Loading career goals…</div>
+        <div className="text-sm text-[color:var(--color-text-muted)]">
+          Loading career goals…
+        </div>
       }
     >
       <GoalsListContent />

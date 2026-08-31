@@ -173,7 +173,7 @@ export default function EditTargetJobPage({ params }: PageProps) {
       {loadStatus === "ok" && (
         <form
           onSubmit={handleSubmit}
-          className="border rounded p-5 bg-white shadow-sm space-y-4"
+          className="border rounded p-5 bg-white space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">

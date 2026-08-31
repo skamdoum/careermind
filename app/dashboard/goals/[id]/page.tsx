@@ -312,7 +312,7 @@ export default function GoalDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          <section className="border rounded p-5 bg-white shadow-sm">
+          <section className="border rounded p-5 bg-white">
             <h2 className="font-semibold text-lg mb-3">Goal details</h2>
             <div className="text-sm text-gray-700 space-y-2">
               <div>
@@ -345,7 +345,7 @@ export default function GoalDetailPage({ params }: PageProps) {
             )}
           </section>
 
-          <section className="border rounded p-5 bg-white shadow-sm">
+          <section className="border rounded p-5 bg-white">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <h2 className="font-semibold text-lg">Target roles</h2>
@@ -434,7 +434,7 @@ export default function GoalDetailPage({ params }: PageProps) {
             )}
           </section>
 
-          <section className="border rounded p-5 bg-white shadow-sm">
+          <section className="border rounded p-5 bg-white">
             <div className="mb-3">
               <h2 className="font-semibold text-lg">Cross-job insights</h2>
               <p className="text-sm text-gray-500 mt-1">

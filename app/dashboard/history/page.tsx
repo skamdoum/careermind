@@ -1,10 +1,28 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
+import PageHeader from "@/app/components/ui/PageHeader";
+import Badge, { type BadgeVariant } from "@/app/components/ui/Badge";
+import MetaStrip from "@/app/components/ui/MetaStrip";
+import EmptyState from "@/app/components/ui/EmptyState";
 
 type PageProps = {
   searchParams: Promise<{ all?: string }>;
 };
+
+const VERDICT_SCORE: Record<string, number> = {
+  "Below Bar": 1,
+  Borderline: 2,
+  "Strong Hire": 3,
+};
+
+function verdictVariant(verdict: string | undefined | null): BadgeVariant {
+  if (verdict === "Strong Hire") return "success";
+  if (verdict === "Borderline") return "caution";
+  if (verdict === "Below Bar") return "danger";
+  return "neutral";
+}
 
 export default async function HistoryPage({ searchParams }: PageProps) {
   const { all } = await searchParams;
@@ -31,68 +49,104 @@ export default async function HistoryPage({ searchParams }: PageProps) {
   if (error) {
     return (
       <>
-        <h1 className="text-2xl font-bold mb-4">History error</h1>
-        <pre className="bg-gray-100 p-4 rounded whitespace-pre-wrap text-sm">
+        <PageHeader title="History" description="Something went wrong loading your history." />
+        <pre className="bg-[color:var(--color-surface-elevated)] rounded-[6px] p-4 whitespace-pre-wrap text-[13px]">
           {JSON.stringify(error, null, 2)}
         </pre>
       </>
     );
   }
 
-  const totalAnalyses = analyses?.length || 0;
-  const visibleAnalyses = showAll ? analyses : analyses?.slice(0, 5);
+  const list = analyses ?? [];
+  const totalAnalyses = list.length;
+  const visibleAnalyses = showAll ? list : list.slice(0, 5);
+
+  // Recent trend — moved here from Overview. Compares the two most recent
+  // verdicts. Present only when we actually have two verdicts to compare.
+  const verdicts = list
+    .map((a) => (a.raw_json as { core_verdict?: string } | null)?.core_verdict)
+    .filter((v): v is string => typeof v === "string" && v in VERDICT_SCORE);
+  const current = verdicts[0];
+  const previous = verdicts[1];
+  let trendLabel: string | null = null;
+  if (current && previous) {
+    const cur = VERDICT_SCORE[current];
+    const prev = VERDICT_SCORE[previous];
+    if (cur > prev) trendLabel = "Improving";
+    else if (cur < prev) trendLabel = "Mixed";
+    else trendLabel = "Stable";
+  }
 
   return (
     <>
-      <h1 className="text-2xl font-bold">History</h1>
+      <PageHeader
+        title="History"
+        description="Every analysis you've run under this career direction, newest first."
+      />
 
-      {analyses?.length === 0 && (
-        <div className="text-gray-500">
-          No analyses yet. Run your first analysis to get started.
+      {trendLabel && (
+        <MetaStrip
+          items={[
+            { label: "Previous", value: previous },
+            { label: "Current", value: current },
+            { label: "Trend", value: trendLabel },
+          ]}
+        />
+      )}
+
+      {totalAnalyses === 0 && (
+        <EmptyState
+          title="No analyses yet"
+          description="Run your first analysis from a target role to start building history."
+        />
+      )}
+
+      {visibleAnalyses.length > 0 && (
+        <div className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] divide-y divide-[color:var(--color-border-subtle)] overflow-hidden">
+          {visibleAnalyses.map((a) => {
+            const verdict = (a.raw_json as { core_verdict?: string } | null)
+              ?.core_verdict;
+            return (
+              <Link
+                key={a.id}
+                href={`/dashboard/${a.id}`}
+                className="block px-4 py-3 hover:bg-[color:var(--color-surface-elevated)] transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)] whitespace-nowrap">
+                        {new Date(a.created_at).toLocaleString()}
+                      </span>
+                      {verdict && (
+                        <Badge variant={verdictVariant(verdict)}>
+                          {verdict}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-[14px] text-[color:var(--color-text-primary)] line-clamp-2">
+                      {a.summary || "No summary"}
+                    </div>
+                  </div>
+                  <span className="text-[color:var(--color-text-muted)] mt-1" aria-hidden>
+                    →
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
 
-      {visibleAnalyses?.map((a) => {
-        const verdict = a.raw_json?.core_verdict;
-        return (
-          <a
-            key={a.id}
-            href={`/dashboard/${a.id}`}
-            className="block border rounded p-4 hover:bg-gray-50 cursor-pointer"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-sm text-gray-500">
-                {new Date(a.created_at).toLocaleString()}
-              </div>
-              {verdict && (
-                <span
-                  className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
-                    verdict === "Strong Hire"
-                      ? "bg-green-100 text-green-800"
-                      : verdict === "Borderline"
-                      ? "bg-yellow-100 text-yellow-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {verdict}
-                </span>
-              )}
-            </div>
-            <div className="text-sm text-gray-800 line-clamp-2 mt-1">
-              {a.summary || "No summary"}
-            </div>
-            <div className="text-xs text-blue-600 mt-2">View analysis →</div>
-          </a>
-        );
-      })}
-
       {!showAll && totalAnalyses > 5 && (
-        <a
-          href="?all=1"
-          className="block text-center text-sm text-blue-600 underline py-2"
-        >
-          Show all analyses ({totalAnalyses})
-        </a>
+        <div className="text-center">
+          <Link
+            href="?all=1"
+            className="inline-block rounded-[6px] border border-[color:var(--color-border-standard)] px-4 py-2 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
+          >
+            Show all analyses ({totalAnalyses})
+          </Link>
+        </div>
       )}
     </>
   );

@@ -76,7 +76,7 @@ export default function NewGoalPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="border rounded p-5 bg-white shadow-sm space-y-4"
+        className="border rounded p-5 bg-white space-y-4"
       >
         <div className="space-y-1">
           <label htmlFor="goal-title" className="text-sm font-medium">

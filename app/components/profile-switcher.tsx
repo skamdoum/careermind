@@ -93,14 +93,14 @@ export default function ProfileSwitcher({ userEmail }: ProfileSwitcherProps) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="px-3 py-2 rounded text-sm font-medium border hover:bg-gray-50 flex items-center gap-2 max-w-[220px]"
+        className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-1.5 text-[13px] font-medium hover:bg-[color:var(--color-surface-elevated)] flex items-center gap-2 max-w-[220px] disabled:opacity-60"
         disabled={switching}
       >
-        <span className="text-gray-500 shrink-0">Direction:</span>
-        <span className="text-black truncate">
+        <span className="text-[color:var(--color-text-muted)] shrink-0">Direction</span>
+        <span className="text-[color:var(--color-text-primary)] truncate">
           {activeProfile?.name || "…"}
         </span>
-        <span className="text-gray-400 shrink-0">▾</span>
+        <span className="text-[color:var(--color-text-muted)] shrink-0">▾</span>
       </button>
 
       {open && (

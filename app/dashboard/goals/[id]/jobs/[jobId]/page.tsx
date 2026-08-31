@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
+import PageHeader from "@/app/components/ui/PageHeader";
+import SectionHeader from "@/app/components/ui/SectionHeader";
+import MetaStrip from "@/app/components/ui/MetaStrip";
+import Card from "@/app/components/ui/Card";
+import Badge, { type BadgeVariant } from "@/app/components/ui/Badge";
+import EmptyState from "@/app/components/ui/EmptyState";
 
 type TargetJob = {
   id: string;
@@ -25,6 +31,13 @@ type AnalysisSummary = {
 type PageProps = {
   params: Promise<{ id: string; jobId: string }>;
 };
+
+function verdictVariant(verdict: string | undefined | null): BadgeVariant {
+  if (verdict === "Strong Hire") return "success";
+  if (verdict === "Borderline") return "caution";
+  if (verdict === "Below Bar") return "danger";
+  return "neutral";
+}
 
 export default function TargetJobDetailPage({ params }: PageProps) {
   const { id: goalId, jobId } = use(params);
@@ -87,8 +100,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
           }
         }
       } catch {
-        // Non-fatal — fall through with whatever id we already have. The
-        // server still verifies the id against the active profile.
+        // Non-fatal — fall through with whatever id we already have.
       }
 
       const res = await fetch("/api/analyze", {
@@ -189,12 +201,10 @@ export default function TargetJobDetailPage({ params }: PageProps) {
         const res = await fetch(`/api/goals/${goalId}/jobs/${jobId}`, {
           cache: "no-store",
         });
-
         if (res.status === 401) {
           router.replace("/login");
           return;
         }
-
         if (res.status === 404) {
           if (!cancelled) {
             setJob(null);
@@ -202,17 +212,14 @@ export default function TargetJobDetailPage({ params }: PageProps) {
           }
           return;
         }
-
         const json = await res.json();
         if (cancelled) return;
-
         if (!res.ok || !json?.success) {
           setJob(null);
           setError(json?.error || "Failed to load target role");
           setStatus("error");
           return;
         }
-
         setJob(json.data as TargetJob);
         setStatus("ok");
       } catch (e: unknown) {
@@ -245,26 +252,21 @@ export default function TargetJobDetailPage({ params }: PageProps) {
           `/api/goals/${goalId}/jobs/${jobId}/analyses`,
           { cache: "no-store" }
         );
-
         if (res.status === 401) {
           router.replace("/login");
           return;
         }
-
         if (res.status === 404) {
           if (!cancelled) setAnalyses([]);
           return;
         }
-
         const json = await res.json().catch(() => null);
         if (cancelled) return;
-
         if (!res.ok || !json?.success) {
           setAnalyses([]);
           setAnalysesError(json?.error || "Failed to load analysis history");
           return;
         }
-
         setAnalyses(json.data as AnalysisSummary[]);
       } catch (e: unknown) {
         if (cancelled) return;
@@ -286,69 +288,98 @@ export default function TargetJobDetailPage({ params }: PageProps) {
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="text-[13px]">
         <Link
           href={`/dashboard/goals/${goalId}`}
-          className="text-sm text-gray-500 hover:text-black"
+          className="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
         >
           ← Back to career goal
         </Link>
       </div>
 
       {status === "loading" && (
-        <div className="text-sm text-gray-500">Loading target role…</div>
+        <div className="text-[13px] text-[color:var(--color-text-muted)]">
+          Loading target role…
+        </div>
       )}
 
       {status === "not_found" && (
-        <section className="border border-dashed rounded p-8 bg-white text-center space-y-3">
-          <h2 className="font-semibold text-lg">Target role not found</h2>
-          <p className="text-sm text-gray-600">
-            It may have been deleted, or the link is incorrect.
-          </p>
-          <Link
-            href={`/dashboard/goals/${goalId}`}
-            className="inline-block px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800"
-          >
-            Back to career goal
-          </Link>
-        </section>
+        <EmptyState
+          title="Target role not found"
+          description="It may have been deleted, or the link is incorrect."
+          action={
+            <Link
+              href={`/dashboard/goals/${goalId}`}
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+            >
+              Back to career goal
+            </Link>
+          }
+        />
       )}
 
       {status === "error" && (
-        <div className="border border-red-200 bg-red-50 text-red-800 rounded p-4 text-sm">
-          {error}
-        </div>
+        <Card intent="danger" padding="md">
+          <div className="text-[13px]">{error}</div>
+        </Card>
       )}
 
       {status === "ok" && job !== null && (
         <>
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-3xl font-bold">
-                {job.role_title || "Untitled role"}
-              </h1>
-              <p className="text-sm text-gray-500">
-                {job.company_name || "Company not specified"} · Added{" "}
-                {new Date(job.created_at).toLocaleDateString()}
-              </p>
-            </div>
-            <span
-              className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
-                job.status === "target"
-                  ? "bg-blue-100 text-blue-800"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-            >
-              {job.status}
-            </span>
-          </div>
+          <PageHeader
+            title={job.role_title || "Untitled role"}
+            action={
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/dashboard/goals/${goalId}/jobs/${jobId}/edit`}
+                  className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-3 py-1.5 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
+                >
+                  Edit
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-danger-text)] disabled:opacity-60 disabled:cursor-not-allowed underline underline-offset-2"
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            }
+          />
 
-          <div className="flex flex-wrap items-center gap-2">
+          <MetaStrip
+            items={[
+              {
+                label: "Company",
+                value: job.company_name || "Not specified",
+              },
+              {
+                label: "Added",
+                value: new Date(job.created_at).toLocaleDateString(),
+              },
+              {
+                label: "Status",
+                value: (
+                  <Badge variant={job.status === "target" ? "info" : "neutral"}>
+                    {job.status}
+                  </Badge>
+                ),
+              },
+            ]}
+          />
+
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleAnalyze}
               disabled={analyzing || !resumeChecked || !latestResume}
-              className="px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              className={
+                "inline-flex items-center rounded-[6px] px-4 py-2 text-[13px] font-medium transition " +
+                (analyzing || !resumeChecked || !latestResume
+                  ? "bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-muted)] cursor-not-allowed"
+                  : "bg-[color:var(--color-accent-ink)] text-white hover:opacity-90")
+              }
               title={
                 !latestResume && resumeChecked
                   ? "Upload a resume first"
@@ -357,114 +388,114 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             >
               {analyzing ? "Analyzing…" : "Analyze this role"}
             </button>
-
-            <Link
-              href={`/dashboard/goals/${goalId}/jobs/${jobId}/edit`}
-              className="px-3 py-2 rounded text-sm font-medium border hover:bg-gray-50"
-            >
-              Edit
-            </Link>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="px-3 py-2 rounded text-sm font-medium border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </button>
           </div>
 
           {resumeChecked && !latestResume && (
-            <div className="border border-amber-200 bg-amber-50 text-amber-900 rounded p-3 text-sm">
-              You need a resume on file to run an analysis.{" "}
-              <Link href="/analyze" className="underline font-medium">
-                Upload a resume
-              </Link>
-              , then come back to analyze this role.
-            </div>
+            <Card intent="caution" padding="md">
+              <div className="text-[13px]">
+                You need a resume on file to run an analysis.{" "}
+                <Link
+                  href="/analyze"
+                  className="underline underline-offset-2 font-medium"
+                >
+                  Upload a resume
+                </Link>
+                , then come back to analyze this role.
+              </div>
+            </Card>
           )}
 
           {analyzing && (
-            <div className="border rounded p-3 bg-gray-50 text-sm text-gray-700">
-              Running analysis against this role — this can take up to a minute.
+            <div className="rounded-[6px] bg-[color:var(--color-surface-elevated)] px-4 py-3 text-[13px] text-[color:var(--color-text-secondary)]">
+              Running analysis against this role — this can take up to a
+              minute.
             </div>
           )}
 
           {analyzeError && (
-            <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-              {analyzeError}
-            </div>
+            <Card intent="danger" padding="md">
+              <div className="text-[13px]">{analyzeError}</div>
+            </Card>
           )}
 
           {deleteError && (
-            <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-              {deleteError}
-            </div>
+            <Card intent="danger" padding="md">
+              <div className="text-[13px]">{deleteError}</div>
+            </Card>
           )}
 
           {job.source_url && (
-            <section className="border rounded p-5 bg-white">
-              <h2 className="font-semibold text-lg mb-2">Source</h2>
+            <section className="space-y-2">
+              <SectionHeader title="Source" />
               <a
                 href={job.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-blue-600 underline break-all"
+                className="text-[13px] text-[color:var(--color-accent-ink)] underline underline-offset-2 break-all"
               >
                 {job.source_url}
               </a>
             </section>
           )}
 
-          <section className="border rounded p-5 bg-white">
-            <h2 className="font-semibold text-lg mb-3">Analysis history</h2>
+          <section className="space-y-4">
+            <SectionHeader
+              title="Analysis history"
+              meta={
+                analyses !== null && analyses.length > 0
+                  ? `${analyses.length} analys${
+                      analyses.length === 1 ? "is" : "es"
+                    }`
+                  : undefined
+              }
+            />
 
             {analyses === null && !analysesError && (
-              <div className="text-sm text-gray-500">Loading analyses…</div>
+              <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                Loading analyses…
+              </div>
             )}
 
             {analysesError && (
-              <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-                {analysesError}
-              </div>
+              <Card intent="danger" padding="md">
+                <div className="text-[13px]">{analysesError}</div>
+              </Card>
             )}
 
             {analyses !== null && analyses.length === 0 && !analysesError && (
-              <div className="text-sm text-gray-500">
-                No analyses yet. Run your first analysis for this role.
-              </div>
+              <EmptyState
+                title="No analyses yet"
+                description="Run your first analysis for this role."
+              />
             )}
 
             {analyses !== null && analyses.length > 0 && (
-              <div className="space-y-3">
+              <div className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] divide-y divide-[color:var(--color-border-subtle)] overflow-hidden">
                 {analyses.map((a) => {
                   const verdict = a.raw_json?.core_verdict;
                   return (
                     <Link
                       key={a.id}
                       href={`/dashboard/${a.id}`}
-                      className="block border rounded p-4 hover:bg-gray-50"
+                      className="block px-4 py-3 hover:bg-[color:var(--color-surface-elevated)] transition-colors"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm text-gray-500">
-                          {new Date(a.created_at).toLocaleString()}
-                        </div>
-                        {verdict && (
-                          <span
-                            className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
-                              verdict === "Strong Hire"
-                                ? "bg-green-100 text-green-800"
-                                : verdict === "Borderline"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {verdict}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)] whitespace-nowrap">
+                            {new Date(a.created_at).toLocaleString()}
                           </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-blue-600 mt-2">
-                        View analysis →
+                          {verdict && (
+                            <Badge variant={verdictVariant(verdict)}>
+                              {verdict}
+                            </Badge>
+                          )}
+                        </div>
+                        <span
+                          className="text-[color:var(--color-text-muted)]"
+                          aria-hidden
+                        >
+                          →
+                        </span>
                       </div>
                     </Link>
                   );
@@ -473,9 +504,9 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             )}
           </section>
 
-          <section className="border rounded p-5 bg-white">
-            <h2 className="font-semibold text-lg mb-3">Job description</h2>
-            <pre className="text-sm text-gray-800 leading-6 whitespace-pre-wrap font-sans">
+          <section className="space-y-3">
+            <SectionHeader title="Job description" />
+            <pre className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-4 text-[13px] leading-[1.6] text-[color:var(--color-text-primary)] whitespace-pre-wrap font-sans">
               {job.jd_text}
             </pre>
           </section>

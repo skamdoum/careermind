@@ -138,26 +138,26 @@ export default function EditTargetJobPage({ params }: PageProps) {
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <Link
           href={`/dashboard/goals/${goalId}/jobs/${jobId}`}
-          className="text-sm text-gray-500 hover:text-black"
+          className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
         >
           ← Back to target role
         </Link>
-        <h1 className="text-2xl font-bold">Edit target role</h1>
+        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">Edit target role</h1>
       </div>
 
       {loadStatus === "loading" && (
-        <div className="text-sm text-gray-500">Loading…</div>
+        <div className="text-[13px] text-[color:var(--color-text-muted)]">Loading…</div>
       )}
 
       {loadStatus === "not_found" && (
-        <section className="border border-dashed rounded p-8 bg-white text-center space-y-3">
+        <section className="rounded-[6px] border border-dashed border-[color:var(--color-border-standard)] bg-[color:var(--color-surface-elevated)] p-8 text-center space-y-3">
           <h2 className="font-semibold text-lg">Target role not found</h2>
           <Link
             href={`/dashboard/goals/${goalId}`}
-            className="inline-block px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800"
+            className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
           >
             Back to career goal
           </Link>
@@ -165,7 +165,7 @@ export default function EditTargetJobPage({ params }: PageProps) {
       )}
 
       {loadStatus === "error" && (
-        <div className="border border-red-200 bg-red-50 text-red-800 rounded p-4 text-sm">
+        <div className="rounded-[6px] border border-[color:var(--color-danger-border)] bg-[color:var(--color-danger-bg)] text-[color:var(--color-danger-text)] p-4 text-[13px]">
           {loadError}
         </div>
       )}
@@ -173,44 +173,44 @@ export default function EditTargetJobPage({ params }: PageProps) {
       {loadStatus === "ok" && (
         <form
           onSubmit={handleSubmit}
-          className="border rounded p-5 bg-white space-y-4"
+          className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-5 space-y-5"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label htmlFor="job-company" className="text-sm font-medium">
+            <div className="space-y-1.5">
+              <label htmlFor="job-company" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
                 Company{" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
+                <span className="text-[color:var(--color-text-muted)] font-normal text-[12px]">(optional)</span>
               </label>
               <input
                 id="job-company"
                 type="text"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full border rounded px-3 py-2 text-sm"
+                className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
                 maxLength={200}
               />
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="job-role" className="text-sm font-medium">
+            <div className="space-y-1.5">
+              <label htmlFor="job-role" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
                 Role title{" "}
-                <span className="text-gray-400 font-normal">(optional)</span>
+                <span className="text-[color:var(--color-text-muted)] font-normal text-[12px]">(optional)</span>
               </label>
               <input
                 id="job-role"
                 type="text"
                 value={roleTitle}
                 onChange={(e) => setRoleTitle(e.target.value)}
-                className="w-full border rounded px-3 py-2 text-sm"
+                className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
                 maxLength={200}
               />
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label htmlFor="job-url" className="text-sm font-medium">
+          <div className="space-y-1.5">
+            <label htmlFor="job-url" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
               Source URL{" "}
-              <span className="text-gray-400 font-normal">(optional)</span>
+              <span className="text-[color:var(--color-text-muted)] font-normal text-[12px]">(optional)</span>
             </label>
             <input
               id="job-url"
@@ -218,27 +218,27 @@ export default function EditTargetJobPage({ params }: PageProps) {
               value={sourceUrl}
               onChange={(e) => setSourceUrl(e.target.value)}
               placeholder="https://…"
-              className="w-full border rounded px-3 py-2 text-sm"
+              className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
               maxLength={1000}
             />
           </div>
 
-          <div className="space-y-1">
-            <label htmlFor="job-jd" className="text-sm font-medium">
-              Job description <span className="text-red-600">*</span>
+          <div className="space-y-1.5">
+            <label htmlFor="job-jd" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
+              Job description <span className="text-[color:var(--color-danger-text)]">*</span>
             </label>
             <textarea
               id="job-jd"
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm font-mono leading-6"
+              className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[13px] font-mono leading-6 focus:outline-none focus:border-[color:var(--color-accent-ink)]"
               rows={12}
               required
             />
           </div>
 
           {error && (
-            <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
+            <div className="rounded-[6px] border border-[color:var(--color-danger-border)] bg-[color:var(--color-danger-bg)] text-[color:var(--color-danger-text)] p-3 text-[13px]">
               {error}
             </div>
           )}
@@ -247,13 +247,13 @@ export default function EditTargetJobPage({ params }: PageProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {submitting ? "Saving…" : "Save changes"}
             </button>
             <Link
               href={`/dashboard/goals/${goalId}/jobs/${jobId}`}
-              className="px-4 py-2 rounded text-sm font-medium border hover:bg-gray-50"
+              className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-4 py-2 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
             >
               Cancel
             </Link>

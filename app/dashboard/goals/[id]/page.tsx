@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
+import PageHeader from "@/app/components/ui/PageHeader";
+import SectionHeader from "@/app/components/ui/SectionHeader";
+import MetaStrip from "@/app/components/ui/MetaStrip";
+import Card from "@/app/components/ui/Card";
+import Badge from "@/app/components/ui/Badge";
+import EmptyState from "@/app/components/ui/EmptyState";
 
 type CareerGoal = {
   id: string;
@@ -86,12 +92,10 @@ export default function GoalDetailPage({ params }: PageProps) {
     async function loadGoal() {
       try {
         const res = await fetch(`/api/goals/${id}`, { cache: "no-store" });
-
         if (res.status === 401) {
           router.replace("/login");
           return;
         }
-
         if (res.status === 404) {
           if (!cancelled) {
             setGoal(null);
@@ -99,17 +103,14 @@ export default function GoalDetailPage({ params }: PageProps) {
           }
           return;
         }
-
         const json = await res.json();
         if (cancelled) return;
-
         if (!res.ok || !json?.success) {
           setGoal(null);
           setError(json?.error || "Failed to load career goal");
           setStatus("error");
           return;
         }
-
         setGoal(json.data as CareerGoal);
         setStatus("ok");
       } catch (e: unknown) {
@@ -123,26 +124,21 @@ export default function GoalDetailPage({ params }: PageProps) {
     async function loadJobs() {
       try {
         const res = await fetch(`/api/goals/${id}/jobs`, { cache: "no-store" });
-
         if (res.status === 401) {
           router.replace("/login");
           return;
         }
-
         if (res.status === 404) {
           if (!cancelled) setJobs([]);
           return;
         }
-
         const json = await res.json();
         if (cancelled) return;
-
         if (!res.ok || !json?.success) {
           setJobs([]);
           setJobsError(json?.error || "Failed to load target roles");
           return;
         }
-
         setJobs(json.data as TargetJob[]);
       } catch (e: unknown) {
         if (cancelled) return;
@@ -158,25 +154,20 @@ export default function GoalDetailPage({ params }: PageProps) {
         const res = await fetch(`/api/goals/${id}/insights`, {
           cache: "no-store",
         });
-
         if (res.status === 401) {
           router.replace("/login");
           return;
         }
-
         if (res.status === 404) {
           if (!cancelled) setInsights(null);
           return;
         }
-
         const json = await res.json().catch(() => null);
         if (cancelled) return;
-
         if (!res.ok || !json?.success) {
           setInsightsError(json?.error || "Failed to load insights");
           return;
         }
-
         setInsights(json.data as GoalInsights);
       } catch (e: unknown) {
         if (cancelled) return;
@@ -210,20 +201,16 @@ export default function GoalDetailPage({ params }: PageProps) {
 
     try {
       const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
-
       if (res.status === 401) {
         router.replace("/login");
         return;
       }
-
       const json = await res.json().catch(() => null);
-
       if (!res.ok || !json?.success) {
         setDeleteError(json?.error || "Failed to delete career goal.");
         setDeleting(false);
         return;
       }
-
       router.push(`/dashboard/goals?r=${Date.now()}`);
     } catch (e: unknown) {
       setDeleteError(
@@ -235,168 +222,153 @@ export default function GoalDetailPage({ params }: PageProps) {
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="text-[13px]">
         <Link
           href="/dashboard/goals"
-          className="text-sm text-gray-500 hover:text-black"
+          className="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
         >
           ← Back to Career Goals
         </Link>
       </div>
 
       {status === "loading" && (
-        <div className="text-sm text-gray-500">Loading career goal…</div>
+        <div className="text-[13px] text-[color:var(--color-text-muted)]">
+          Loading career goal…
+        </div>
       )}
 
       {status === "not_found" && (
-        <section className="border border-dashed rounded p-8 bg-white text-center space-y-3">
-          <h2 className="font-semibold text-lg">Career goal not found</h2>
-          <p className="text-sm text-gray-600">
-            It may have been deleted, or the link is incorrect.
-          </p>
-          <Link
-            href="/dashboard/goals"
-            className="inline-block px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800"
-          >
-            Back to Career Goals
-          </Link>
-        </section>
+        <EmptyState
+          title="Career goal not found"
+          description="It may have been deleted, or the link is incorrect."
+          action={
+            <Link
+              href="/dashboard/goals"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+            >
+              Back to Career Goals
+            </Link>
+          }
+        />
       )}
 
       {status === "error" && (
-        <div className="border border-red-200 bg-red-50 text-red-800 rounded p-4 text-sm">
-          {error}
-        </div>
+        <Card intent="danger" padding="md">
+          <div className="text-[14px]">{error}</div>
+        </Card>
       )}
 
       {status === "ok" && goal && (
         <>
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-3xl font-bold">{goal.title}</h1>
-              <p className="text-sm text-gray-500">
-                Created {new Date(goal.created_at).toLocaleDateString()}
-              </p>
-            </div>
-            <span
-              className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
-                goal.status === "active"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-            >
-              {goal.status}
-            </span>
-          </div>
+          <PageHeader
+            title={goal.title}
+            description={
+              goal.description ? goal.description : undefined
+            }
+            action={
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/dashboard/goals/${id}/edit`}
+                  className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-3 py-1.5 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
+                >
+                  Edit
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-danger-text)] disabled:opacity-60 disabled:cursor-not-allowed underline underline-offset-2"
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            }
+          />
 
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/dashboard/goals/${id}/edit`}
-              className="px-3 py-2 rounded text-sm font-medium border hover:bg-gray-50"
-            >
-              Edit
-            </Link>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="px-3 py-2 rounded text-sm font-medium border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </button>
-          </div>
+          <MetaStrip
+            items={[
+              { label: "Target level", value: goal.target_level || "Not set" },
+              {
+                label: "Target function",
+                value: goal.target_function || "Not set",
+              },
+              {
+                label: "Status",
+                value: (
+                  <Badge
+                    variant={goal.status === "active" ? "success" : "neutral"}
+                  >
+                    {goal.status}
+                  </Badge>
+                ),
+              },
+              {
+                label: "Created",
+                value: new Date(goal.created_at).toLocaleDateString(),
+              },
+            ]}
+          />
 
           {deleteError && (
-            <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-              {deleteError}
-            </div>
+            <Card intent="danger" padding="md">
+              <div className="text-[13px]">{deleteError}</div>
+            </Card>
           )}
 
-          <section className="border rounded p-5 bg-white">
-            <h2 className="font-semibold text-lg mb-3">Goal details</h2>
-            <div className="text-sm text-gray-700 space-y-2">
-              <div>
-                <span className="text-gray-500">Target level:</span>{" "}
-                <span className="font-medium">
-                  {goal.target_level || "Not set"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500">Target function:</span>{" "}
-                <span className="font-medium">
-                  {goal.target_function || "Not set"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500">Status:</span>{" "}
-                <span className="font-medium">{goal.status}</span>
-              </div>
-            </div>
-
-            {goal.description && (
-              <div className="mt-4 pt-4 border-t space-y-1">
-                <div className="text-xs text-gray-500 uppercase tracking-wide">
-                  Description
-                </div>
-                <p className="text-sm text-gray-800 leading-6 whitespace-pre-wrap">
-                  {goal.description}
-                </p>
-              </div>
-            )}
-          </section>
-
-          <section className="border rounded p-5 bg-white">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h2 className="font-semibold text-lg">Target roles</h2>
-                {jobs && jobs.length > 0 && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Roles you&apos;re targeting under this goal.
-                  </p>
-                )}
-              </div>
-
-              {jobs && jobs.length > 0 && (
-                <Link
-                  href={`/dashboard/goals/${id}/jobs/new`}
-                  className="px-3 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 whitespace-nowrap"
-                >
-                  Add target role
-                </Link>
-              )}
-            </div>
+          <section className="space-y-4">
+            <SectionHeader
+              title="Target roles"
+              description={
+                jobs && jobs.length > 0
+                  ? "Roles you're targeting under this goal."
+                  : undefined
+              }
+              meta={
+                jobs && jobs.length > 0
+                  ? `${jobs.length} role${jobs.length === 1 ? "" : "s"}`
+                  : undefined
+              }
+              action={
+                jobs && jobs.length > 0 ? (
+                  <Link
+                    href={`/dashboard/goals/${id}/jobs/new`}
+                    className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-3 py-1.5 text-[13px] font-medium text-white hover:opacity-90"
+                  >
+                    Add target role
+                  </Link>
+                ) : null
+              }
+            />
 
             {jobsLoading && (
-              <div className="text-sm text-gray-500">Loading target roles…</div>
+              <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                Loading target roles…
+              </div>
             )}
 
             {jobsError && (
-              <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-                {jobsError}
-              </div>
+              <Card intent="danger" padding="md">
+                <div className="text-[13px]">{jobsError}</div>
+              </Card>
             )}
 
             {jobsEmpty && (
-              <div className="border border-dashed rounded p-6 bg-gray-50 text-center space-y-3">
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-700 font-medium">
-                    No target roles yet.
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Add 2–5 roles to identify patterns across your target market.
-                  </p>
-                </div>
-                <Link
-                  href={`/dashboard/goals/${id}/jobs/new`}
-                  className="inline-block px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800"
-                >
-                  Add target role
-                </Link>
-              </div>
+              <EmptyState
+                title="No target roles yet"
+                description="Add 2–5 roles to identify patterns across your target market."
+                action={
+                  <Link
+                    href={`/dashboard/goals/${id}/jobs/new`}
+                    className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+                  >
+                    Add target role
+                  </Link>
+                }
+              />
             )}
 
             {jobs && jobs.length > 0 && (
-              <div className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
                 {jobs.map((j) => {
                   const heading =
                     [j.role_title, j.company_name].filter(Boolean).join(" · ") ||
@@ -405,26 +377,22 @@ export default function GoalDetailPage({ params }: PageProps) {
                     <Link
                       key={j.id}
                       href={`/dashboard/goals/${id}/jobs/${j.id}`}
-                      className="block border rounded p-4 hover:bg-gray-50"
+                      className="block rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-4 hover:border-[color:var(--color-text-primary)] transition-colors"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="font-medium">{heading}</div>
-                        <span
-                          className={`text-xs px-2 py-1 rounded font-medium whitespace-nowrap ${
-                            j.status === "target"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
+                        <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)] min-w-0">
+                          {heading}
+                        </div>
+                        <Badge
+                          variant={j.status === "target" ? "info" : "neutral"}
                         >
                           {j.status}
-                        </span>
+                        </Badge>
                       </div>
-
-                      <div className="text-sm text-gray-700 mt-2 leading-6">
+                      <div className="text-[13px] leading-[1.6] text-[color:var(--color-text-secondary)] mt-2">
                         {jdPreview(j.jd_text)}
                       </div>
-
-                      <div className="text-xs text-gray-500 mt-2">
+                      <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)] mt-3">
                         Added {new Date(j.created_at).toLocaleDateString()}
                       </div>
                     </Link>
@@ -434,138 +402,132 @@ export default function GoalDetailPage({ params }: PageProps) {
             )}
           </section>
 
-          <section className="border rounded p-5 bg-white">
-            <div className="mb-3">
-              <h2 className="font-semibold text-lg">Cross-job insights</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Patterns across your analyzed target roles under this goal.
-              </p>
-            </div>
+          <section className="space-y-4">
+            <SectionHeader
+              title="Cross-job insights"
+              description="Patterns across your analyzed target roles under this goal."
+            />
 
             {insights === null && !insightsError && (
-              <div className="text-sm text-gray-500">Loading insights…</div>
+              <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                Loading insights…
+              </div>
             )}
 
             {insightsError && (
-              <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-                {insightsError}
-              </div>
+              <Card intent="danger" padding="md">
+                <div className="text-[13px]">{insightsError}</div>
+              </Card>
             )}
 
             {insights && insights.analyzed_role_count < 2 && (
-              <div className="border border-dashed rounded p-6 bg-gray-50 text-sm text-gray-700 text-center space-y-1">
-                <p className="font-medium">Not enough analyzed roles yet.</p>
-                <p className="text-gray-600">
-                  Analyze at least 2 target roles to identify patterns across
-                  your market.{" "}
-                  {insights.analyzed_role_count === 1 &&
-                    "You've analyzed 1 so far."}
-                </p>
-              </div>
+              <EmptyState
+                title="Not enough analyzed roles yet"
+                description={`Analyze at least 2 target roles to identify patterns across your market.${
+                  insights.analyzed_role_count === 1
+                    ? " You've analyzed 1 so far."
+                    : ""
+                }`}
+              />
             )}
 
             {insights && insights.analyzed_role_count >= 2 && (
-              <div className="space-y-5">
-                <div className="text-xs text-gray-500">
+              <div className="space-y-6">
+                <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
                   Based on the latest analysis for each of your{" "}
                   {insights.analyzed_role_count} analyzed target roles.
                 </div>
 
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-gray-800">
-                    Recurring strengths
-                  </h3>
-                  {insights.recurring_signals.length > 0 ? (
-                    <ul className="space-y-2">
-                      {insights.recurring_signals.map((item) => (
-                        <li
-                          key={`signal-${item.label}`}
-                          className="border rounded p-3 bg-gray-50"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm font-medium">
-                              {item.label}
-                            </div>
-                            <div className="text-xs text-gray-600 whitespace-nowrap">
-                              {item.count} of {insights.analyzed_role_count}{" "}
-                              roles · {item.percentage}%
-                            </div>
-                          </div>
-                          {item.sample_rationale && (
-                            <div className="text-xs text-gray-600 mt-1 leading-5">
-                              {item.sample_rationale}
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-sm text-gray-600">
-                      No recurring strengths yet across your{" "}
-                      {insights.analyzed_role_count} analyzed roles — each role
-                      currently returns distinct strengths.
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+                      Recurring strengths
                     </div>
-                  )}
+                    {insights.recurring_signals.length > 0 ? (
+                      <ul className="divide-y divide-[color:var(--color-border-subtle)] rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] overflow-hidden">
+                        {insights.recurring_signals.map((item) => (
+                          <li
+                            key={`signal-${item.label}`}
+                            className="px-4 py-3 space-y-1"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)]">
+                                {item.label}
+                              </div>
+                              <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)] whitespace-nowrap">
+                                {item.count}/{insights.analyzed_role_count} ·{" "}
+                                {item.percentage}%
+                              </div>
+                            </div>
+                            {item.sample_rationale && (
+                              <div className="text-[12px] leading-[1.5] text-[color:var(--color-text-secondary)]">
+                                {item.sample_rationale}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                        No recurring strengths yet across your{" "}
+                        {insights.analyzed_role_count} analyzed roles.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[color:var(--color-text-muted)]">
+                      Recurring gaps
+                    </div>
+                    {insights.recurring_gaps.length > 0 ? (
+                      <ul className="divide-y divide-[color:var(--color-border-subtle)] rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] overflow-hidden">
+                        {insights.recurring_gaps.map((item) => (
+                          <li
+                            key={`gap-${item.label}`}
+                            className="px-4 py-3 space-y-1"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)]">
+                                {item.label}
+                              </div>
+                              <div className="text-[11px] uppercase tracking-[0.03em] text-[color:var(--color-text-muted)] whitespace-nowrap">
+                                {item.count}/{insights.analyzed_role_count} ·{" "}
+                                {item.percentage}%
+                              </div>
+                            </div>
+                            {item.sample_rationale && (
+                              <div className="text-[12px] leading-[1.5] text-[color:var(--color-text-secondary)]">
+                                {item.sample_rationale}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-[13px] text-[color:var(--color-text-muted)]">
+                        No gap currently appears across multiple target roles.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-gray-800">
-                    Recurring gaps
-                  </h3>
-                  {insights.recurring_gaps.length > 0 ? (
-                    <ul className="space-y-2">
-                      {insights.recurring_gaps.map((item) => (
-                        <li
-                          key={`gap-${item.label}`}
-                          className="border rounded p-3 bg-gray-50"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="text-sm font-medium">
-                              {item.label}
-                            </div>
-                            <div className="text-xs text-gray-600 whitespace-nowrap">
-                              {item.count} of {insights.analyzed_role_count}{" "}
-                              roles · {item.percentage}%
-                            </div>
-                          </div>
-                          {item.sample_rationale && (
-                            <div className="text-xs text-gray-600 mt-1 leading-5">
-                              {item.sample_rationale}
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-sm text-gray-600">
-                      No gap currently appears across multiple target roles.
-                      Your identified gaps are role-specific so far.
-                    </div>
-                  )}
-                </div>
-
-                <div className="border rounded p-4 bg-green-50 space-y-2">
-                  <h3 className="text-sm font-semibold text-gray-900">
+                <Card intent="info" padding="lg">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
                     Recommended focus
-                  </h3>
+                  </div>
                   {insights.recommended_focus.length > 0 ? (
-                    <ul className="space-y-1">
+                    <ul className="space-y-1 text-[15px] leading-[1.6] text-[color:var(--color-text-primary)]">
                       {insights.recommended_focus.map((line, i) => (
-                        <li
-                          key={`focus-${i}`}
-                          className="text-sm text-gray-900 leading-6"
-                        >
-                          {line}
-                        </li>
+                        <li key={`focus-${i}`}>{line}</li>
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-sm text-gray-800">
+                    <div className="text-[14px] text-[color:var(--color-text-primary)]">
                       Recommended focus appears once at least one gap recurs
                       across roles.
                     </div>
                   )}
-                </div>
+                </Card>
               </div>
             )}
           </section>

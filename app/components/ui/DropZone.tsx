@@ -110,10 +110,17 @@ export default function DropZone({
         tabIndex={-1}
         aria-hidden="true"
         onChange={(e) => {
-          const files = e.target.files;
-          // Reset the input so re-picking the same filename still fires onChange.
+          // Capture the File first — HTMLInputElement.files is a LIVE
+          // reference to the input's selected-files list, and resetting
+          // input.value below empties it. Reading files[0] AFTER the reset
+          // would silently do nothing, which was the "replace doesn't
+          // work" bug.
+          const file = e.target.files?.[0] ?? null;
+          // Reset the input so re-picking the same filename still fires
+          // onChange later.
           e.target.value = "";
-          handleFiles(files);
+          if (!file) return;
+          void onFile(file);
         }}
       />
     </div>

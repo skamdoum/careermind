@@ -123,23 +123,23 @@ export default function EditCareerProfilePage({ params }: PageProps) {
 
   return (
     <>
-      <div className="space-y-1">
-        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-black">
+      <div className="space-y-1.5">
+        <Link href="/dashboard" className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]">
           ← Back
         </Link>
-        <h1 className="text-2xl font-bold">Edit career profile</h1>
+        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">Edit career profile</h1>
       </div>
 
       {loadStatus === "loading" && (
-        <div className="text-sm text-gray-500">Loading…</div>
+        <div className="text-[13px] text-[color:var(--color-text-muted)]">Loading…</div>
       )}
 
       {loadStatus === "not_found" && (
-        <section className="border border-dashed rounded p-8 bg-white text-center space-y-3">
+        <section className="rounded-[6px] border border-dashed border-[color:var(--color-border-standard)] bg-[color:var(--color-surface-elevated)] p-8 text-center space-y-3">
           <h2 className="font-semibold text-lg">Career profile not found</h2>
           <Link
             href="/dashboard"
-            className="inline-block px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800"
+            className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
           >
             Back to dashboard
           </Link>
@@ -147,7 +147,7 @@ export default function EditCareerProfilePage({ params }: PageProps) {
       )}
 
       {loadStatus === "error" && (
-        <div className="border border-red-200 bg-red-50 text-red-800 rounded p-4 text-sm">
+        <div className="rounded-[6px] border border-[color:var(--color-danger-border)] bg-[color:var(--color-danger-bg)] text-[color:var(--color-danger-text)] p-4 text-[13px]">
           {loadError}
         </div>
       )}
@@ -155,41 +155,41 @@ export default function EditCareerProfilePage({ params }: PageProps) {
       {loadStatus === "ok" && (
         <form
           onSubmit={handleSubmit}
-          className="border rounded p-5 bg-white space-y-4"
+          className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-5 space-y-5"
         >
-          <div className="space-y-1">
-            <label htmlFor="profile-name" className="text-sm font-medium">
-              Name <span className="text-red-600">*</span>
+          <div className="space-y-1.5">
+            <label htmlFor="profile-name" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
+              Name <span className="text-[color:var(--color-danger-text)]">*</span>
             </label>
             <input
               id="profile-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm"
+              className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
               required
               maxLength={200}
               autoFocus
             />
           </div>
 
-          <div className="space-y-1">
-            <label htmlFor="profile-description" className="text-sm font-medium">
+          <div className="space-y-1.5">
+            <label htmlFor="profile-description" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
               Description{" "}
-              <span className="text-gray-400 font-normal">(optional)</span>
+              <span className="text-[color:var(--color-text-muted)] font-normal text-[12px]">(optional)</span>
             </label>
             <textarea
               id="profile-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm"
+              className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
               rows={3}
               maxLength={500}
             />
           </div>
 
           {error && (
-            <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
+            <div className="rounded-[6px] border border-[color:var(--color-danger-border)] bg-[color:var(--color-danger-bg)] text-[color:var(--color-danger-text)] p-3 text-[13px]">
               {error}
             </div>
           )}
@@ -198,13 +198,13 @@ export default function EditCareerProfilePage({ params }: PageProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {submitting ? "Saving…" : "Save changes"}
             </button>
             <Link
               href="/dashboard"
-              className="px-4 py-2 rounded text-sm font-medium border hover:bg-gray-50"
+              className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-4 py-2 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
             >
               Cancel
             </Link>

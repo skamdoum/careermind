@@ -3,6 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import PageHeader from "@/app/components/ui/PageHeader";
+import Card from "@/app/components/ui/Card";
+
+const INPUT_CLASS =
+  "w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]";
+const LABEL_CLASS =
+  "text-[13px] font-semibold text-[color:var(--color-text-primary)]";
+const HINT_CLASS =
+  "text-[color:var(--color-text-muted)] font-normal text-[12px]";
 
 export default function NewGoalPage() {
   const router = useRouter();
@@ -54,117 +63,119 @@ export default function NewGoalPage() {
 
       router.push(`/dashboard/goals/${json.data.id}?r=${Date.now()}`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to create career goal.");
+      setError(
+        e instanceof Error ? e.message : "Failed to create career goal."
+      );
       setSubmitting(false);
     }
   }
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="text-[13px]">
         <Link
           href="/dashboard/goals"
-          className="text-sm text-gray-500 hover:text-black"
+          className="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
         >
           ← Back to Career Goals
         </Link>
-        <h1 className="text-2xl font-bold">New career goal</h1>
-        <p className="text-sm text-gray-500">
-          Define the direction you&apos;re targeting. You can refine it later.
-        </p>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="border rounded p-5 bg-white space-y-4"
-      >
-        <div className="space-y-1">
-          <label htmlFor="goal-title" className="text-sm font-medium">
-            Title <span className="text-red-600">*</span>
-          </label>
-          <input
-            id="goal-title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Senior PM at an AI infra company"
-            className="w-full border rounded px-3 py-2 text-sm"
-            required
-            maxLength={200}
-            autoFocus
-          />
-        </div>
+      <PageHeader
+        title="New career goal"
+        description="Define the direction you're targeting. You can refine it later."
+      />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label htmlFor="goal-level" className="text-sm font-medium">
-              Target level <span className="text-gray-400 font-normal">(optional)</span>
+      <Card padding="lg">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <label htmlFor="goal-title" className={LABEL_CLASS}>
+              Title <span className="text-[color:var(--color-danger-text)]">*</span>
             </label>
             <input
-              id="goal-level"
+              id="goal-title"
               type="text"
-              value={targetLevel}
-              onChange={(e) => setTargetLevel(e.target.value)}
-              placeholder="e.g. Senior, Principal"
-              className="w-full border rounded px-3 py-2 text-sm"
-              maxLength={100}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Senior PM at an AI infra company"
+              className={INPUT_CLASS}
+              required
+              maxLength={200}
+              autoFocus
             />
           </div>
 
-          <div className="space-y-1">
-            <label htmlFor="goal-function" className="text-sm font-medium">
-              Target function <span className="text-gray-400 font-normal">(optional)</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="goal-level" className={LABEL_CLASS}>
+                Target level <span className={HINT_CLASS}>(optional)</span>
+              </label>
+              <input
+                id="goal-level"
+                type="text"
+                value={targetLevel}
+                onChange={(e) => setTargetLevel(e.target.value)}
+                placeholder="e.g. Senior, Principal"
+                className={INPUT_CLASS}
+                maxLength={100}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="goal-function" className={LABEL_CLASS}>
+                Target function <span className={HINT_CLASS}>(optional)</span>
+              </label>
+              <input
+                id="goal-function"
+                type="text"
+                value={targetFunction}
+                onChange={(e) => setTargetFunction(e.target.value)}
+                placeholder="e.g. Platform PM, AI PM"
+                className={INPUT_CLASS}
+                maxLength={100}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="goal-description" className={LABEL_CLASS}>
+              Describe your career goal{" "}
+              <span className={HINT_CLASS}>(optional)</span>
             </label>
-            <input
-              id="goal-function"
-              type="text"
-              value={targetFunction}
-              onChange={(e) => setTargetFunction(e.target.value)}
-              placeholder="e.g. Platform PM, AI PM"
-              className="w-full border rounded px-3 py-2 text-sm"
-              maxLength={100}
+            <textarea
+              id="goal-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Include the type of role, scope, domain, or career direction you want to pursue."
+              className={INPUT_CLASS + " leading-6"}
+              rows={5}
+              maxLength={2000}
             />
           </div>
-        </div>
 
-        <div className="space-y-1">
-          <label htmlFor="goal-description" className="text-sm font-medium">
-            Describe your career goal{" "}
-            <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <textarea
-            id="goal-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Include the type of role, scope, domain, or career direction you want to pursue."
-            className="w-full border rounded px-3 py-2 text-sm leading-6"
-            rows={5}
-            maxLength={2000}
-          />
-        </div>
+          {error && (
+            <Card intent="danger" padding="md">
+              <div className="text-[13px]">{error}</div>
+            </Card>
+          )}
 
-        {error && (
-          <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
-            {error}
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Creating…" : "Create career goal"}
+            </button>
+            <Link
+              href="/dashboard/goals"
+              className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-4 py-2 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
+            >
+              Cancel
+            </Link>
           </div>
-        )}
-
-        <div className="flex items-center gap-2 pt-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {submitting ? "Creating…" : "Create career goal"}
-          </button>
-          <Link
-            href="/dashboard/goals"
-            className="px-4 py-2 rounded text-sm font-medium border hover:bg-gray-50"
-          >
-            Cancel
-          </Link>
-        </div>
-      </form>
+        </form>
+      </Card>
     </>
   );
 }

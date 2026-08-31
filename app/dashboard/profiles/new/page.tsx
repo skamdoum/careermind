@@ -62,12 +62,12 @@ export default function NewCareerProfilePage() {
 
   return (
     <>
-      <div className="space-y-1">
-        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-black">
+      <div className="space-y-1.5">
+        <Link href="/dashboard" className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]">
           ← Back
         </Link>
-        <h1 className="text-2xl font-bold">New career profile</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">New career profile</h1>
+        <p className="text-[13px] text-[color:var(--color-text-muted)]">
           A career direction you want to explore. Each profile has its own
           resumes, goals, target roles, and analyses.
         </p>
@@ -75,11 +75,11 @@ export default function NewCareerProfilePage() {
 
       <form
         onSubmit={handleSubmit}
-        className="border rounded p-5 bg-white space-y-4"
+        className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-5 space-y-5"
       >
-        <div className="space-y-1">
-          <label htmlFor="profile-name" className="text-sm font-medium">
-            Name <span className="text-red-600">*</span>
+        <div className="space-y-1.5">
+          <label htmlFor="profile-name" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
+            Name <span className="text-[color:var(--color-danger-text)]">*</span>
           </label>
           <input
             id="profile-name"
@@ -87,31 +87,31 @@ export default function NewCareerProfilePage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. AI Product Management"
-            className="w-full border rounded px-3 py-2 text-sm"
+            className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
             required
             maxLength={200}
             autoFocus
           />
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor="profile-description" className="text-sm font-medium">
+        <div className="space-y-1.5">
+          <label htmlFor="profile-description" className="text-[13px] font-semibold text-[color:var(--color-text-primary)]">
             Description{" "}
-            <span className="text-gray-400 font-normal">(optional)</span>
+            <span className="text-[color:var(--color-text-muted)] font-normal text-[12px]">(optional)</span>
           </label>
           <textarea
             id="profile-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="A short note about this direction"
-            className="w-full border rounded px-3 py-2 text-sm"
+            className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
             rows={3}
             maxLength={500}
           />
         </div>
 
         {error && (
-          <div className="border border-red-200 bg-red-50 text-red-800 rounded p-3 text-sm">
+          <div className="rounded-[6px] border border-[color:var(--color-danger-border)] bg-[color:var(--color-danger-bg)] text-[color:var(--color-danger-text)] p-3 text-[13px]">
             {error}
           </div>
         )}
@@ -120,13 +120,13 @@ export default function NewCareerProfilePage() {
           <button
             type="submit"
             disabled={submitting}
-            className="px-4 py-2 rounded text-sm font-medium bg-black text-white hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitting ? "Creating…" : "Create profile"}
           </button>
           <Link
             href="/dashboard"
-            className="px-4 py-2 rounded text-sm font-medium border hover:bg-gray-50"
+            className="inline-flex items-center rounded-[6px] border border-[color:var(--color-border-standard)] px-4 py-2 text-[13px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
           >
             Cancel
           </Link>

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Insights from "../insights";
+import ActionPlan from "../ActionPlan";
 
-export default async function StrategyPage() {
+export default async function ActionPlanPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -12,10 +12,5 @@ export default async function StrategyPage() {
     redirect("/login");
   }
 
-  return (
-    <>
-      <h1 className="text-2xl font-bold">Action Plan</h1>
-      <Insights mode="strategy" />
-    </>
-  );
+  return <ActionPlan />;
 }

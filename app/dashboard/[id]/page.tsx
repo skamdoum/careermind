@@ -6,7 +6,8 @@ import SectionHeader from "@/app/components/ui/SectionHeader";
 import Card from "@/app/components/ui/Card";
 import MetaStrip from "@/app/components/ui/MetaStrip";
 import VerdictHero from "@/app/components/ui/VerdictHero";
-import Badge from "@/app/components/ui/Badge";
+import SignalRow from "@/app/components/ui/SignalRow";
+import GapRow from "@/app/components/ui/GapRow";
 
 export const dynamic = "force-dynamic";
 
@@ -139,34 +140,16 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
         />
 
         {data?.signals?.length ? (
-          <div className="space-y-3">
-            {data.signals.map((s, i) => {
-              const score = Number(s.score ?? 0);
-              const scoreVariant =
-                score >= 4 ? "success" : score === 3 ? "caution" : "neutral";
-              return (
-                <Card key={i} padding="md">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)] min-w-0">
-                      {s.signal_name || s.name}
-                    </div>
-                    <Badge variant={scoreVariant}>{score}/5</Badge>
-                  </div>
-
-                  <p className="text-[14px] leading-[1.6] text-[color:var(--color-text-secondary)] mt-2">
-                    {s.rationale || s.reasoning}
-                  </p>
-
-                  {s.evidence && s.evidence.length > 0 && (
-                    <ul className="list-disc pl-5 mt-3 text-[13px] text-[color:var(--color-text-secondary)] space-y-1">
-                      {s.evidence.map((item, idx) => (
-                        <li key={idx}>{item}</li>
-                      ))}
-                    </ul>
-                  )}
-                </Card>
-              );
-            })}
+          <div className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] divide-y divide-[color:var(--color-border-subtle)] overflow-hidden">
+            {data.signals.map((s, i) => (
+              <SignalRow
+                key={i}
+                name={s.signal_name || s.name}
+                score={typeof s.score === "number" ? s.score : undefined}
+                rationale={s.rationale || s.reasoning}
+                evidence={s.evidence}
+              />
+            ))}
           </div>
         ) : (
           <div className="text-[13px] text-[color:var(--color-text-muted)]">
@@ -182,42 +165,16 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
         />
 
         {data?.gaps && data.gaps.length > 0 ? (
-          <div className="space-y-3">
-            {data.gaps.map((g, i) => {
-              const sev = String(g.severity || "").toLowerCase();
-              const dotColor =
-                sev === "high"
-                  ? "bg-[color:var(--color-danger-text)]"
-                  : sev === "medium"
-                  ? "bg-[color:var(--color-caution-text)]"
-                  : "bg-[color:var(--color-text-muted)]";
-              return (
-                <Card key={i} padding="md">
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`}
-                      aria-label={`Severity ${g.severity || "unspecified"}`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[15px] font-semibold text-[color:var(--color-text-primary)]">
-                        {g.gap_title || g.title || `Gap ${i + 1}`}
-                      </div>
-                      <p className="text-[14px] leading-[1.6] text-[color:var(--color-text-secondary)] mt-1">
-                        {g.gap_description || g.description}
-                      </p>
-                      {g.recommended_fix && (
-                        <p className="text-[13px] text-[color:var(--color-text-muted)] mt-2">
-                          <span className="font-semibold text-[color:var(--color-text-secondary)]">
-                            Suggested fix ·{" "}
-                          </span>
-                          {g.recommended_fix}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+          <div className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] divide-y divide-[color:var(--color-border-subtle)] overflow-hidden">
+            {data.gaps.map((g, i) => (
+              <GapRow
+                key={i}
+                title={g.gap_title || g.title || `Gap ${i + 1}`}
+                description={g.gap_description || g.description}
+                severity={g.severity}
+                recommendedFix={g.recommended_fix}
+              />
+            ))}
           </div>
         ) : (
           <div className="text-[13px] text-[color:var(--color-text-muted)]">

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Insights from "./insights";
+import Overview from "./Overview";
 import PageHeader from "@/app/components/ui/PageHeader";
 
 export default async function DashboardPage() {
@@ -20,7 +20,7 @@ export default async function DashboardPage() {
         title="Overview"
         description="Where you stand right now — the coaching insight, the patterns across your analyses, and the focus that will move the needle."
       />
-      <Insights mode="overview" />
+      <Overview />
     </>
   );
 }

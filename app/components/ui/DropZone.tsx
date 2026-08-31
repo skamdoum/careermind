@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 type DropZoneProps = {
   accept?: string;
@@ -22,6 +22,13 @@ type DropZoneProps = {
  * click. The consumer is expected to handle the upload lifecycle
  * (state, errors) since that's where the resume-identity contract
  * lives per V2.1 fix.
+ *
+ * Deliberately does NOT use a <label htmlFor> around the visible
+ * content: pairing a label with an outer role="button" wrapper causes
+ * the file dialog to open twice per click (label default action +
+ * wrapper onClick both call the hidden input). We keep the wrapper
+ * as the sole click target and let the wrapper's onClick be the
+ * single entry point.
  */
 export default function DropZone({
   accept,
@@ -32,7 +39,6 @@ export default function DropZone({
   className = "",
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const inputId = useId();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFiles = useCallback(
@@ -64,6 +70,7 @@ export default function DropZone({
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled}
+      aria-label={label}
       onClick={openPicker}
       onKeyDown={(e) => {
         if (disabled) return;
@@ -88,21 +95,20 @@ export default function DropZone({
         handleFiles(e.dataTransfer.files);
       }}
     >
-      <label htmlFor={inputId} className="cursor-inherit block">
-        <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)]">
-          {label}
-        </div>
-        <div className="text-[12px] text-[color:var(--color-text-muted)] mt-1">
-          {hint}
-        </div>
-      </label>
+      <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)] pointer-events-none">
+        {label}
+      </div>
+      <div className="text-[12px] text-[color:var(--color-text-muted)] mt-1 pointer-events-none">
+        {hint}
+      </div>
       <input
         ref={inputRef}
-        id={inputId}
         type="file"
         accept={accept}
         disabled={disabled}
         className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
         onChange={(e) => {
           const files = e.target.files;
           // Reset the input so re-picking the same filename still fires onChange.

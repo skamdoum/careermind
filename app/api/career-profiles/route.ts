@@ -16,7 +16,7 @@ export async function GET() {
     const data = await getCareerProfilesForUser();
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    return errorResponse(error, "Failed to load career profiles");
+    return errorResponse(error, "Failed to load job searches");
   }
 }
 
@@ -78,6 +78,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ success: true, data }, { status: 201 });
   } catch (error) {
-    return errorResponse(error, "Failed to create career profile");
+    return errorResponse(error, "Failed to create job search");
   }
 }

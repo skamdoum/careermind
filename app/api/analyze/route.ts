@@ -196,7 +196,7 @@ export async function POST(req: Request) {
           {
             success: false,
             error:
-              "Resume not found for the active career profile. Refresh and try again.",
+              "Resume not found for the active job search. Refresh and try again.",
           },
           { status: 404 }
         );

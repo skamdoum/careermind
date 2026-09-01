@@ -39,12 +39,12 @@ export default function NewCareerProfilePage() {
       const json = await res.json().catch(() => null);
 
       if (!res.ok || !json?.success) {
-        setError(json?.error || "Failed to create career profile.");
+        setError(json?.error || "Failed to create job search.");
         setSubmitting(false);
         return;
       }
 
-      // Switch to the newly created profile so its scope becomes active.
+      // Switch to the newly created search so its scope becomes active.
       await fetch("/api/career-profiles/switch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -54,7 +54,7 @@ export default function NewCareerProfilePage() {
       window.location.assign("/dashboard");
     } catch (e: unknown) {
       setError(
-        e instanceof Error ? e.message : "Failed to create career profile."
+        e instanceof Error ? e.message : "Failed to create job search."
       );
       setSubmitting(false);
     }
@@ -66,10 +66,11 @@ export default function NewCareerProfilePage() {
         <Link href="/dashboard" className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]">
           ← Back
         </Link>
-        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">New career profile</h1>
+        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">New job search</h1>
         <p className="text-[13px] text-[color:var(--color-text-muted)]">
-          A career direction you want to explore. Each profile has its own
-          resumes, goals, target roles, and analyses.
+          A separate workspace for a parallel job search. Each search has
+          its own resumes, career goals, target roles, and analyses — so
+          patterns don&apos;t mix.
         </p>
       </div>
 
@@ -86,7 +87,7 @@ export default function NewCareerProfilePage() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. AI Product Management"
+            placeholder="e.g. Senior AI Product Management search"
             className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
             required
             maxLength={200}
@@ -103,7 +104,7 @@ export default function NewCareerProfilePage() {
             id="profile-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="A short note about this direction"
+            placeholder="A short note about this search — e.g. what direction, why it's separate"
             className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
             rows={3}
             maxLength={500}
@@ -122,7 +123,7 @@ export default function NewCareerProfilePage() {
             disabled={submitting}
             className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {submitting ? "Creating…" : "Create profile"}
+            {submitting ? "Creating…" : "Create job search"}
           </button>
           <Link
             href="/dashboard"

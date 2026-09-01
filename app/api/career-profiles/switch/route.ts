@@ -6,7 +6,7 @@ function errorResponse(error: unknown, fallback: string) {
     error instanceof Error && error.message ? error.message : fallback;
   let status = 500;
   if (message === "Unauthorized") status = 401;
-  else if (message === "Career profile not found") status = 404;
+  else if (message === "Job search not found") status = 404;
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
@@ -40,6 +40,6 @@ export async function POST(req: Request) {
     const data = await switchActiveCareerProfile(id);
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    return errorResponse(error, "Failed to switch career profile");
+    return errorResponse(error, "Failed to switch job search");
   }
 }

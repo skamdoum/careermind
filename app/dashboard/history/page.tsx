@@ -83,7 +83,7 @@ export default async function HistoryPage({ searchParams }: PageProps) {
     <>
       <PageHeader
         title="History"
-        description="Every analysis you've run under this career direction, newest first."
+        description="Every analysis you've run under this job search, newest first."
       />
 
       {trendLabel && (

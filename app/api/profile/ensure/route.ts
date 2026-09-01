@@ -44,7 +44,8 @@ export async function POST() {
         .from("career_profiles")
         .insert({
           user_id: user.id,
-          name: "My career direction",
+          // Keep in sync with lib/db/career-profiles.ts default.
+          name: "My job search",
           is_default: true,
         })
         .select("id")

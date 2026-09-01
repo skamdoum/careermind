@@ -6,7 +6,6 @@ import { Suspense, useEffect, useState } from "react";
 import PageHeader from "@/app/components/ui/PageHeader";
 import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
-import EmptyState from "@/app/components/ui/EmptyState";
 
 type CareerGoal = {
   id: string;
@@ -98,18 +97,72 @@ function GoalsListContent() {
       )}
 
       {isEmpty && (
-        <EmptyState
-          title="No career goals yet"
-          description="Set a goal to anchor your analyses against a specific direction — level, function, and the roles you're targeting."
-          action={
+        <section className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] p-6 md:p-8 space-y-6">
+          <div className="space-y-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[color:var(--color-text-muted)]">
+              First time here
+            </div>
+            <h2 className="text-[18px] font-semibold tracking-[-0.005em] text-[color:var(--color-text-primary)]">
+              Set up your job search
+            </h2>
+            <p className="text-[13px] text-[color:var(--color-text-secondary)] max-w-2xl">
+              You do the first three. CareerMind turns the analyses into
+              recurring patterns, positioning strategy, and a prioritized
+              action plan.
+            </p>
+          </div>
+
+          <ol className="grid gap-3 md:grid-cols-2">
+            {[
+              {
+                n: 1,
+                title: "Set your direction",
+                desc: "Define the level, function, or career path you're targeting.",
+              },
+              {
+                n: 2,
+                title: "Add target roles",
+                desc: "Add 2–5 real jobs you'd seriously consider.",
+              },
+              {
+                n: 3,
+                title: "Analyze your fit",
+                desc: "Upload your resume once and evaluate it against each role.",
+              },
+              {
+                n: 4,
+                title: "Work your plan",
+                desc: "CareerMind turns recurring strengths and gaps into positioning, strategy, and prioritized actions.",
+              },
+            ].map((s) => (
+              <li
+                key={s.n}
+                className="flex items-start gap-3 rounded-[6px] bg-[color:var(--color-surface-elevated)] px-4 py-3"
+              >
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-ink)] text-white text-[12px] font-semibold">
+                  {s.n}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[14px] font-semibold text-[color:var(--color-text-primary)]">
+                    {s.title}
+                  </div>
+                  <p className="text-[13px] leading-[1.5] text-[color:var(--color-text-secondary)] mt-0.5">
+                    {s.desc}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <div>
             <Link
               href="/dashboard/goals/new"
-              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[14px] font-medium text-white hover:opacity-90"
             >
               Create your first career goal
             </Link>
-          }
-        />
+          </div>
+        </section>
       )}
 
       {goals && goals.length > 0 && (

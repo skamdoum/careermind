@@ -1,7 +1,39 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 import StrategyNarrativeClient from "./strategy-narrative-client";
+import PageHeader from "@/app/components/ui/PageHeader";
+import EmptyState from "@/app/components/ui/EmptyState";
+
+function StrategyEmpty({ analysesCount }: { analysesCount: number }) {
+  const description =
+    analysesCount === 0
+      ? "Strategy is built from the patterns across your analyses — positioning, narrative, where to focus vs. where to avoid. Run at least 2 analyses on target roles under a career goal to see yours."
+      : analysesCount === 1
+      ? "You've analyzed 1 target role — one more unlocks the cross-role patterns Strategy is built from. Head to your career goal to analyze the next one."
+      : "You have analyses on file but CareerMind couldn't extract enough signal to build Strategy yet. Try analyzing another role.";
+  return (
+    <div className="mx-auto max-w-[48rem] space-y-8">
+      <PageHeader
+        title="Strategy"
+        description="Where you're positioned, where to focus, and the story to tell — built from the patterns across your analyses."
+      />
+      <EmptyState
+        title="Strategy appears once you've analyzed 2+ target roles"
+        description={description}
+        action={
+          <Link
+            href="/dashboard/goals"
+            className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+          >
+            Go to your career goal
+          </Link>
+        }
+      />
+    </div>
+  );
+}
 
 const KEYWORD_GROUPS: { label: string; keywords: string[] }[] = [
   { label: "Strategy & roadmap", keywords: ["strategy", "roadmap"] },
@@ -97,53 +129,51 @@ export default async function StrategyV2Page() {
   const top_signal = top_signals[0] || null;
   const top_gap = top_gaps[0] || null;
   const hasData = !!(top_signal && top_gap);
+  const analysesCount = analyses?.length ?? 0;
 
-  const positioning = hasData
-    ? `Position yourself around your strength in ${top_signal!.name} — that's your most credible differentiator right now. Until your ${top_gap!.name} story strengthens, frame those questions around active progress rather than past depth.`
-    : "Run more analyses to surface a clear positioning angle.";
+  // Not enough evidence yet — render a real empty state, not
+  // "Run more analyses to X" placeholder prose.
+  if (!hasData) {
+    return (
+      <StrategyEmpty analysesCount={analysesCount} />
+    );
+  }
 
-  const whereToFocus: string[] = hasData
-    ? [
-        `Roles where ${top_signal!.name} is a headline competency, not a side requirement`,
-        "Teams with mature strategy frameworks where you can plug in execution depth",
-        "Companies that hire ICs into senior tracks based on shipping outcomes",
-      ]
-    : ["Run more analyses to identify role-fit signals."];
+  const positioning = `Position yourself around your strength in ${top_signal!.name} — that's your most credible differentiator right now. Until your ${top_gap!.name} story strengthens, frame those questions around active progress rather than past depth.`;
 
-  const whereToAvoid: string[] = hasData
-    ? [
-        `Roles that demand ${top_gap!.name} as a day-1 expectation`,
-        recommended_focus[0]
-          ? `Senior roles where ${recommended_focus[0]} ownership is non-negotiable upfront`
-          : "Senior strategy roles before you have stronger evidence on your top gap",
-        "Generalist mandates where you can't lead with your strongest signal",
-      ]
-    : ["Run more analyses to identify roles to avoid."];
+  const whereToFocus: string[] = [
+    `Roles where ${top_signal!.name} is a headline competency, not a side requirement`,
+    "Teams with mature strategy frameworks where you can plug in execution depth",
+    "Companies that hire ICs into senior tracks based on shipping outcomes",
+  ];
 
-  const tradeoffs: string[] = hasData
-    ? [
-        `Lead with ${top_signal!.name} examples; foreground outcomes, not the process behind them`,
-        `For ${top_gap!.name} questions: acknowledge briefly, then pivot to your active growth plan`,
-        recommended_focus[0]
-          ? `Demonstrate awareness and direction on ${recommended_focus[0]} rather than claiming senior-level ownership`
-          : "Acknowledge growth areas without overstating depth",
-        "Anchor every story in measurable impact, not job titles or team size",
-      ]
-    : ["Run more analyses to surface positioning tradeoffs."];
+  const whereToAvoid: string[] = [
+    `Roles that demand ${top_gap!.name} as a day-1 expectation`,
+    recommended_focus[0]
+      ? `Senior roles where ${recommended_focus[0]} ownership is non-negotiable upfront`
+      : "Senior strategy roles before you have stronger evidence on your top gap",
+    "Generalist mandates where you can't lead with your strongest signal",
+  ];
 
-  const narrative = hasData
-    ? recommended_focus.length >= 2
+  const tradeoffs: string[] = [
+    `Lead with ${top_signal!.name} examples; foreground outcomes, not the process behind them`,
+    `For ${top_gap!.name} questions: acknowledge briefly, then pivot to your active growth plan`,
+    recommended_focus[0]
+      ? `Demonstrate awareness and direction on ${recommended_focus[0]} rather than claiming senior-level ownership`
+      : "Acknowledge growth areas without overstating depth",
+    "Anchor every story in measurable impact, not job titles or team size",
+  ];
+
+  const narrative =
+    recommended_focus.length >= 2
       ? `"I'm a PM with a strong track record of ${top_signal!.name}, and I'm now investing deliberately in ${recommended_focus[0]} and ${recommended_focus[1]}. My next move is into a senior role where I can pair execution depth with broader ownership."`
-      : `"I'm a PM with a strong track record of ${top_signal!.name}, and I'm actively closing the gap on ${top_gap!.name}. My next move is into a senior role where I can pair execution depth with broader ownership."`
-    : "Run more analyses to draft a positioning narrative.";
+      : `"I'm a PM with a strong track record of ${top_signal!.name}, and I'm actively closing the gap on ${top_gap!.name}. My next move is into a senior role where I can pair execution depth with broader ownership."`;
 
-  const risks: string[] = hasData
-    ? [
-        `Being typecast based on your ${top_signal!.name} strength when you want broader scope`,
-        `Losing senior loops on the ${top_gap!.name} bar before you get to showcase your strengths`,
-        "Underselling adjacent skills that don't show up in your aggregated signal data",
-      ]
-    : ["Run more analyses to identify positioning risks."];
+  const risks: string[] = [
+    `Being typecast based on your ${top_signal!.name} strength when you want broader scope`,
+    `Losing senior loops on the ${top_gap!.name} bar before you get to showcase your strengths`,
+    "Underselling adjacent skills that don't show up in your aggregated signal data",
+  ];
 
   return (
     <StrategyNarrativeClient

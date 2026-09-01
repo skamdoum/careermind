@@ -97,11 +97,15 @@ export default function HistoryList({
 
       {visible.length === 0 ? (
         <EmptyState
-          title="No analyses match this filter"
+          title={
+            filter === "all"
+              ? "No analyses yet"
+              : "No analyses match this filter"
+          }
           description={
             filter === "all"
-              ? "Run your first analysis from a target role to start building history."
-              : `No ${FILTER_LABEL[filter]} verdicts in your current view.`
+              ? "Every analysis you run lands here. Head to a target role under one of your career goals to run your first."
+              : `No ${FILTER_LABEL[filter]} verdicts yet.`
           }
         />
       ) : (

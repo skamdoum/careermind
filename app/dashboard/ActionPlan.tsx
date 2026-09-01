@@ -82,10 +82,16 @@ export default function ActionPlan() {
 
   if (actions.length === 0) {
     return (
-      <EmptyState
-        title="No action plan yet"
-        description="Run an analysis on a target role to generate your first prioritized plan."
-      />
+      <div className="space-y-8">
+        <PageHeader
+          title="Action Plan"
+          description="Your prioritized execution plan across target roles — built from the gaps CareerMind identifies in your analyses."
+        />
+        <EmptyState
+          title="Your action plan is built from analyses"
+          description="Run at least one analysis on a target role to generate your first prioritized tasks. Cross-role patterns compound with each additional analysis."
+        />
+      </div>
     );
   }
 

@@ -88,6 +88,29 @@ export default function ProfileSwitcher({ userEmail }: ProfileSwitcherProps) {
     }
   }
 
+  // Zero-profile transient state (should be rare — new users get a
+  // default profile created lazily). Render nothing rather than a
+  // dangling switcher chrome.
+  if (profiles.length === 0) return null;
+
+  // Single-profile users: don't render the full switcher — it creates
+  // a phantom "pick something" decision for users who will only ever
+  // have one workspace. Show a small "+ Add search" affordance
+  // instead so the multi-workspace feature stays discoverable.
+  if (profiles.length === 1) {
+    return (
+      <div className="flex items-center">
+        <Link
+          href="/dashboard/profiles/new"
+          className="text-[13px] text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+          title="Run a parallel job search under a separate workspace"
+        >
+          + Add search
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -96,7 +119,6 @@ export default function ProfileSwitcher({ userEmail }: ProfileSwitcherProps) {
         className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-1.5 text-[13px] font-medium hover:bg-[color:var(--color-surface-elevated)] flex items-center gap-2 max-w-[220px] disabled:opacity-60"
         disabled={switching}
       >
-        <span className="text-[color:var(--color-text-muted)] shrink-0">Direction</span>
         <span className="text-[color:var(--color-text-primary)] truncate">
           {activeProfile?.name || "…"}
         </span>
@@ -147,7 +169,7 @@ export default function ProfileSwitcher({ userEmail }: ProfileSwitcherProps) {
               onClick={() => setOpen(false)}
               className="block px-3 py-2 rounded-[6px] text-[13px] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-surface-elevated)]"
             >
-              + New career profile
+              + New job search
             </Link>
             {activeId && (
               <Link
@@ -155,7 +177,7 @@ export default function ProfileSwitcher({ userEmail }: ProfileSwitcherProps) {
                 onClick={() => setOpen(false)}
                 className="block px-3 py-2 rounded-[6px] text-[13px] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-elevated)]"
               >
-                Edit current profile
+                Edit current search
               </Link>
             )}
           </div>

@@ -13,6 +13,6 @@ export async function GET() {
     const data = await getActiveCareerProfile();
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    return errorResponse(error, "Failed to load active career profile");
+    return errorResponse(error, "Failed to load active job search");
   }
 }

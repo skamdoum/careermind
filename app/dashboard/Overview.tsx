@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import Card from "@/app/components/ui/Card";
 import SectionHeader from "@/app/components/ui/SectionHeader";
+import SetupChecklist from "@/app/components/ui/SetupChecklist";
+import EmptyState from "@/app/components/ui/EmptyState";
 
 /**
  * Career Pattern / Overview surface.
@@ -199,19 +202,43 @@ function RecurringList({
   );
 }
 
+type SetupSnapshot = {
+  goals_count: number;
+  resumes_count: number;
+  goal: {
+    id: string;
+    title: string | null;
+    jobs_count: number;
+    analyses_count: number;
+    latest_job_id: string | null;
+  } | null;
+};
+
 export default function Overview() {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [narrative, setNarrative] = useState<Narrative | null>(null);
+  const [setup, setSetup] = useState<SetupSnapshot | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [narrativeResolved, setNarrativeResolved] = useState(false);
+  const [setupLoaded, setSetupLoaded] = useState(false);
+  const [insightsLoaded, setInsightsLoaded] = useState(false);
 
   useEffect(() => {
+    fetch("/api/setup/status", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) setSetup(d.data as SetupSnapshot);
+      })
+      .catch(() => {})
+      .finally(() => setSetupLoaded(true));
+
     fetch("/api/insights")
       .then((r) => r.json())
       .then((d) => {
         setInsights(d?.success ? (d.data as Insights) : null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setInsightsLoaded(true));
 
     const skeletonTimer = setTimeout(() => setShowSkeleton(true), 300);
 
@@ -230,14 +257,80 @@ export default function Overview() {
     return () => clearTimeout(skeletonTimer);
   }, []);
 
-  if (!insights) {
+  // Wait for the setup status to arrive before deciding which state
+  // to render — otherwise a user with zero analyses briefly flashes
+  // an empty "Career pattern" pane and then flips to the checklist,
+  // which reads as jank on first login.
+  if (!setupLoaded) {
     return (
-      <section className="space-y-3">
-        <SectionHeader title="Career pattern" />
-        <div className="text-[13px] text-[color:var(--color-text-muted)]">
-          Loading insights…
-        </div>
-      </section>
+      <div className="text-[13px] text-[color:var(--color-text-muted)]">
+        Loading…
+      </div>
+    );
+  }
+
+  const analysesCount = setup?.goal?.analyses_count ?? 0;
+
+  // 0 analyses — the workflow hasn't produced anything yet. Show
+  // the Getting Started checklist (same contract as Goal Detail)
+  // and explain what Overview will eventually be.
+  if (analysesCount === 0) {
+    return (
+      <div className="space-y-6">
+        <EmptyState
+          title="Overview appears once you've analyzed target roles"
+          description="It's where CareerMind will show your recurring strengths, gaps, and coaching insight — built from patterns across the analyses you run. Start setting up your job search below."
+        />
+        <SetupChecklist
+          goalId={setup?.goal?.id}
+          title="Get set up"
+          subtitle="Your first analysis evaluates one role and starts your Action Plan. Analyze another target role to unlock recurring patterns and Strategy."
+        />
+      </div>
+    );
+  }
+
+  // 1 analysis — one evaluation exists, but "patterns" require 2+.
+  if (analysesCount === 1) {
+    const nextRoleHref = setup?.goal
+      ? `/dashboard/goals/${setup.goal.id}`
+      : "/dashboard/goals";
+    return (
+      <div className="space-y-6">
+        <EmptyState
+          title="One analysis in — one more unlocks patterns and Strategy"
+          description="Your first evaluation is useful on its own and your Action Plan is already populated. Recurring signals, gaps, and Strategy appear once CareerMind has 2+ analyses under the same career goal to compare."
+          action={
+            <Link
+              href={nextRoleHref}
+              className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"
+            >
+              Analyze another role
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  // 2+ analyses — normal Overview. Insights should be present at
+  // this point; if the fetch is still in flight, wait for it.
+  if (!insightsLoaded) {
+    return (
+      <div className="text-[13px] text-[color:var(--color-text-muted)]">
+        Loading insights…
+      </div>
+    );
+  }
+
+  if (!insights) {
+    // Rare: analyses exist but the aggregator returned null. Render
+    // a light explanation rather than the "Loading…" trap.
+    return (
+      <EmptyState
+        title="Not enough signal yet"
+        description="You have analyses on file but CareerMind couldn't extract patterns from them yet. Try analyzing another role, or open a specific analysis to review its output."
+      />
     );
   }
 
@@ -296,8 +389,8 @@ export default function Overview() {
         </Card>
 
         {focusSentence && (
-          <Card intent="info" padding="lg">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
+          <Card intent="warm" padding="lg">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[color:var(--color-warm-accent)] mb-2">
               Recommended focus
             </div>
             <p className="text-[16px] font-medium leading-[1.5] text-[color:var(--color-text-primary)]">

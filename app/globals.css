@@ -2,8 +2,15 @@
 
 /*
  * CareerMind design tokens (Analyst Desk direction).
- * Neutral by default; color earns its place.
- * Semantic hues are reserved for verdicts/severity/priority — never decorative.
+ *
+ * Product color meaning:
+ *   Neutral canvas          — workspace / page surface (~75%)
+ *   Blue (brand)            — intelligence, structure, primary interaction (~20%)
+ *   Warm terracotta accent  — prioritized focus / active progress (~5%)
+ *   Semantic green/amber/red — evaluation state (verdict, severity)
+ *
+ * The `accent-ink` token name is retained for backwards-compat with
+ * existing component code. Its value is now the brand blue.
  */
 
 :root {
@@ -13,15 +20,47 @@
   --color-surface-elevated: #F5F5F4;
   --color-text-primary: #0A0A0A;
   --color-text-secondary: #525252;
-  --color-text-muted: #A3A3A3;
-  --color-border: #E5E5E5;
-  --color-border-subtle: #F0F0EF;
+  /* Deepened from #A3A3A3 so metadata labels stay clearly readable. */
+  --color-text-muted: #737373;
+  /* Deepened so card borders and row dividers register against the
+     warm-white page background instead of dissolving. */
+  --color-border: #D4D4D4;
+  --color-border-subtle: #E5E5E5;
 
-  /* Accent — the single accent hue in the product. */
-  --color-accent-ink: #1E293B;
-  --color-accent-ink-tint: #F1F5F9;
+  /* Brand — deep Prussian blue.
+     Used for primary CTAs, the active nav underline, coaching/guidance
+     surfaces, Setup Checklist completion + CTAs, Action Plan progress
+     bar, and any other intelligence-oriented primary interaction. */
+  --color-brand-blue: #1D3557;
+  --color-brand-blue-hover: #17304A;
 
-  /* Semantic — verdict / severity / priority. Each has bg/border/text. */
+  /* Deep Prussian midnight — reserved for one and only one use: the
+     large dark canvas of the landing hero chapter. Not for buttons,
+     not for nav, not for any application/dashboard surface. Same
+     hue axis as --color-brand-blue but ~7% lightness so it reads as
+     "editorial canvas" rather than "brand blue at scale." */
+  --color-brand-blue-deep: #0F1B2D;
+
+  /* Backwards-compat alias: existing components use
+     --color-accent-ink for their primary-button bg + active-tab
+     underline. Point it at the brand blue so no downstream code
+     needs to change. */
+  --color-accent-ink: var(--color-brand-blue);
+  --color-accent-ink-tint: #E7EDF3;
+
+  /* Warm accent — muted burnt terracotta.
+     Reserved for prioritized focus and active progress:
+       - Recommended Focus card surface
+       - Action Plan "In progress" status dot
+     Not decorative. Do not use for generic buttons, headings, or
+     borders. Any future use must satisfy the meaning above. */
+  --color-warm-accent: #B85C3A;
+  --color-warm-accent-hover: #9A4B2E;
+  --color-warm-bg: #F7E8DF;
+  --color-warm-border: #E8CDBB;
+
+  /* Semantic — verdict / severity / priority. Each has bg/border/text.
+     Reserved for evaluation state; never repurposed for accent use. */
   --color-success-bg: #F0FDF4;
   --color-success-border: #BBF7D0;
   --color-success-text: #166534;
@@ -34,9 +73,13 @@
   --color-danger-border: #FECACA;
   --color-danger-text: #991B1B;
 
-  --color-info-bg: #F1F5F9;
-  --color-info-border: #CBD5E1;
-  --color-info-text: #1E293B;
+  /* Info surfaces (Coaching Insight, Job-specific guidance, Recommended
+     focus-container-shape, etc.) use the brand-blue tint so intelligence
+     surfaces read as one visual family. Kept in sync with
+     --color-accent-ink-tint. */
+  --color-info-bg: #E7EDF3;
+  --color-info-border: #BFCEDD;
+  --color-info-text: #1D3557;
 
   --color-priority-bg: #F5F5F4;
   --color-priority-border: #D4D4D4;
@@ -61,8 +104,16 @@
   --color-border-standard: var(--color-border);
   --color-border-subtle: var(--color-border-subtle);
 
+  --color-brand-blue: var(--color-brand-blue);
+  --color-brand-blue-hover: var(--color-brand-blue-hover);
+  --color-brand-blue-deep: var(--color-brand-blue-deep);
   --color-accent-ink: var(--color-accent-ink);
   --color-accent-ink-tint: var(--color-accent-ink-tint);
+
+  --color-warm-accent: var(--color-warm-accent);
+  --color-warm-accent-hover: var(--color-warm-accent-hover);
+  --color-warm-bg: var(--color-warm-bg);
+  --color-warm-border: var(--color-warm-border);
 
   --color-success-bg: var(--color-success-bg);
   --color-success-border: var(--color-success-border);

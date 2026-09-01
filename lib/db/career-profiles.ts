@@ -102,7 +102,11 @@ export async function resolveActiveCareerProfile(
     .from("career_profiles")
     .insert({
       user_id: userId,
-      name: "My career direction",
+      // New default naming: the top-level workspace container is
+      // surfaced as "Search" (i.e. "job search") — see the profile
+      // switcher UI. Older rows created before this rename still
+      // display as "My career direction" until the user edits.
+      name: "My job search",
       is_default: true,
     })
     .select()
@@ -110,7 +114,7 @@ export async function resolveActiveCareerProfile(
 
   if (createErr || !created) {
     throw new Error(
-      `Failed to create default career profile: ${createErr?.message ?? "unknown"}`
+      `Failed to create default job search: ${createErr?.message ?? "unknown"}`
     );
   }
 
@@ -150,7 +154,7 @@ export async function getCareerProfilesForUser(): Promise<CareerProfile[]> {
     .order("created_at", { ascending: true });
 
   if (error) {
-    throw new Error(`Failed to load career profiles: ${error.message}`);
+    throw new Error(`Failed to load job searches: ${error.message}`);
   }
 
   return (data ?? []) as CareerProfile[];
@@ -169,7 +173,7 @@ export async function getCareerProfileById(
     .maybeSingle();
 
   if (error) {
-    throw new Error(`Failed to fetch career profile: ${error.message}`);
+    throw new Error(`Failed to fetch job search: ${error.message}`);
   }
 
   return (data as CareerProfile | null) ?? null;
@@ -192,7 +196,7 @@ export async function createCareerProfile(
     .single();
 
   if (error) {
-    throw new Error(`Failed to create career profile: ${error.message}`);
+    throw new Error(`Failed to create job search: ${error.message}`);
   }
 
   return data as CareerProfile;
@@ -219,11 +223,11 @@ export async function updateCareerProfile(
     .maybeSingle();
 
   if (error) {
-    throw new Error(`Failed to update career profile: ${error.message}`);
+    throw new Error(`Failed to update job search: ${error.message}`);
   }
 
   if (!data) {
-    throw new Error("Career profile not found");
+    throw new Error("Job search not found");
   }
 
   return data as CareerProfile;
@@ -242,11 +246,11 @@ export async function switchActiveCareerProfile(
     .maybeSingle();
 
   if (cpErr) {
-    throw new Error(`Failed to verify career profile: ${cpErr.message}`);
+    throw new Error(`Failed to verify job search: ${cpErr.message}`);
   }
 
   if (!cp) {
-    throw new Error("Career profile not found");
+    throw new Error("Job search not found");
   }
 
   const { error: updErr } = await supabase
@@ -255,7 +259,7 @@ export async function switchActiveCareerProfile(
     .eq("id", user.id);
 
   if (updErr) {
-    throw new Error(`Failed to switch career profile: ${updErr.message}`);
+    throw new Error(`Failed to switch job search: ${updErr.message}`);
   }
 
   return cp as CareerProfile;

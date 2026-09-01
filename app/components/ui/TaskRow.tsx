@@ -23,8 +23,12 @@ type TaskRowProps = {
 };
 
 function statusDotClass(status: TaskStatus): string {
+  // Warm terracotta marks active progress — per the product color
+  // meaning, "in progress" is the state that most deserves the eye,
+  // and warm accent is the reserved cue for that. Done stays semantic
+  // green; New stays neutral.
   if (status === "done") return "bg-[color:var(--color-success-text)]";
-  if (status === "in_progress") return "bg-[color:var(--color-caution-text)]";
+  if (status === "in_progress") return "bg-[color:var(--color-warm-accent)]";
   return "bg-[color:var(--color-text-muted)]";
 }
 

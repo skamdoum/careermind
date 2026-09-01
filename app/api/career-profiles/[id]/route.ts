@@ -13,7 +13,7 @@ function errorResponse(error: unknown, fallback: string) {
     error instanceof Error && error.message ? error.message : fallback;
   let status = 500;
   if (message === "Unauthorized") status = 401;
-  else if (message === "Career profile not found") status = 404;
+  else if (message === "Job search not found") status = 404;
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
@@ -24,14 +24,14 @@ export async function GET(_req: Request, { params }: RouteProps) {
 
     if (!data) {
       return NextResponse.json(
-        { success: false, error: "Career profile not found" },
+        { success: false, error: "Job search not found" },
         { status: 404 }
       );
     }
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    return errorResponse(error, "Failed to fetch career profile");
+    return errorResponse(error, "Failed to fetch job search");
   }
 }
 
@@ -102,6 +102,6 @@ export async function PATCH(req: Request, { params }: RouteProps) {
     const data = await updateCareerProfile(id, payload);
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    return errorResponse(error, "Failed to update career profile");
+    return errorResponse(error, "Failed to update job search");
   }
 }

@@ -181,13 +181,15 @@ export default function AnalyzePage() {
         description="Upload your resume, paste a target job description, and get a structured evaluation of your strengths, biggest gaps, and highest-leverage next steps."
       />
 
-      <div className="text-[13px] text-[color:var(--color-text-muted)]">
-        Analyzing for a specific target role?{" "}
+      <div className="rounded-[6px] bg-[color:var(--color-surface-elevated)] px-4 py-3 text-[13px] text-[color:var(--color-text-secondary)]">
+        <span className="text-[color:var(--color-text-primary)] font-semibold">One-off analysis.</span>{" "}
+        Results here won&apos;t roll up into any career goal&apos;s cross-role
+        patterns or Strategy. For a role you&apos;re actually targeting,{" "}
         <Link
           href="/dashboard/goals"
-          className="text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)] underline underline-offset-2"
+          className="underline underline-offset-2 hover:text-[color:var(--color-text-primary)]"
         >
-          Start from your career goal →
+          start from your career goal →
         </Link>
       </div>
 
@@ -221,9 +223,13 @@ export default function AnalyzePage() {
             label={
               latestResume
                 ? "Replace with a different file"
-                : "Drop a file or click to upload"
+                : "Upload your resume"
             }
-            hint="PDF, DOC, DOCX, or TXT"
+            hint={
+              latestResume
+                ? "PDF, DOC, DOCX, or TXT"
+                : "Upload once and use it across your target roles · PDF, DOC, DOCX, or TXT"
+            }
           />
 
           {uploading && (
@@ -284,7 +290,7 @@ export default function AnalyzePage() {
             <Badge variant="neutral">Coming soon</Badge>
           </span>
         }
-        description="Weigh 2–3 target roles against your resume and career profile in one pass. Ships with a future release — for now, analyze roles one at a time from your career goals."
+        description="Weigh 2–3 target roles against your resume and career goal in one pass. Ships with a future release — for now, analyze roles one at a time from your career goals."
       />
 
       <Card padding="lg">

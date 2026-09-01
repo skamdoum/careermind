@@ -9,6 +9,7 @@ import MetaStrip from "@/app/components/ui/MetaStrip";
 import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
 import EmptyState from "@/app/components/ui/EmptyState";
+import SetupChecklist from "@/app/components/ui/SetupChecklist";
 
 type CareerGoal = {
   id: string;
@@ -315,6 +316,16 @@ export default function GoalDetailPage({ params }: PageProps) {
             </Card>
           )}
 
+          {/*
+            Getting Started — appears only while setup is incomplete
+            for this goal, hides itself when all four steps done.
+            Same completion contract as Overview.
+          */}
+          <SetupChecklist
+            goalId={goal.id}
+            subtitle="Your first analysis evaluates one role and starts your Action Plan. Analyzing a second role unlocks recurring patterns and Strategy."
+          />
+
           <section className="space-y-4">
             <SectionHeader
               title="Target roles"
@@ -355,7 +366,7 @@ export default function GoalDetailPage({ params }: PageProps) {
             {jobsEmpty && (
               <EmptyState
                 title="No target roles yet"
-                description="Add 2–5 roles to identify patterns across your target market."
+                description="Add the jobs you're targeting. Analyzing one starts your Action Plan; two or more unlock cross-role patterns and Strategy."
                 action={
                   <Link
                     href={`/dashboard/goals/${id}/jobs/new`}
@@ -404,8 +415,8 @@ export default function GoalDetailPage({ params }: PageProps) {
 
           <section className="space-y-4">
             <SectionHeader
-              title="Cross-job insights"
-              description="Patterns across your analyzed target roles under this goal."
+              title="Cross-role patterns"
+              description="Patterns CareerMind identifies from the analyses across the target roles under this goal. Adding a role isn't enough — an analysis has to run against it for its evidence to count here."
             />
 
             {insights === null && !insightsError && (
@@ -422,12 +433,8 @@ export default function GoalDetailPage({ params }: PageProps) {
 
             {insights && insights.analyzed_role_count < 2 && (
               <EmptyState
-                title="Not enough analyzed roles yet"
-                description={`Analyze at least 2 target roles to identify patterns across your market.${
-                  insights.analyzed_role_count === 1
-                    ? " You've analyzed 1 so far."
-                    : ""
-                }`}
+                title="Cross-role patterns appear after 2+ analyses"
+                description={`Analyses are the evidence CareerMind aggregates — running one against a target role adds it to your patterns. You've analyzed ${insights.analyzed_role_count} of your target roles so far.`}
               />
             )}
 
@@ -511,8 +518,8 @@ export default function GoalDetailPage({ params }: PageProps) {
                   </div>
                 </div>
 
-                <Card intent="info" padding="lg">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-80 mb-2">
+                <Card intent="warm" padding="lg">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[color:var(--color-warm-accent)] mb-2">
                     Recommended focus
                   </div>
                   {insights.recommended_focus.length > 0 ? (

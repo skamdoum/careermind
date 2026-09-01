@@ -229,7 +229,7 @@ export default function EditGoalPage({ params }: PageProps) {
               id="goal-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Include the type of role, scope, domain, or career direction you want to pursue."
+              placeholder="Include the type of role, scope, domain, or direction you want to pursue."
               className="w-full rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] px-3 py-2 text-[14px] focus:outline-none focus:border-[color:var(--color-accent-ink)]"
               rows={5}
               maxLength={2000}

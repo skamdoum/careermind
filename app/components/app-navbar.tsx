@@ -41,13 +41,19 @@ export default function AppNavbar() {
     window.location.href = "/login";
   }
 
-  const isActive = (href: string) =>
-    pathname === href || pathname?.startsWith(href + "/");
+  const isActive = (href: string) => {
+    if (pathname === href) return true;
+    // Special-case /dashboard: it's a prefix of every dashboard route,
+    // so only exact-match it. Every other tab does the usual prefix
+    // check so nested pages keep highlighting their parent tab.
+    if (href === "/dashboard") return false;
+    return pathname?.startsWith(href + "/") ?? false;
+  };
 
   const tabClass = (href: string) =>
     "relative py-3 text-[14px] font-medium transition-colors " +
     (isActive(href)
-      ? "text-[color:var(--color-text-primary)] after:absolute after:left-0 after:right-0 after:-bottom-px after:h-[2px] after:bg-[color:var(--color-text-primary)]"
+      ? "text-[color:var(--color-text-primary)] after:absolute after:left-0 after:right-0 after:-bottom-px after:h-[3px] after:bg-[color:var(--color-brand-blue)]"
       : "text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]");
 
   return (
@@ -61,15 +67,21 @@ export default function AppNavbar() {
             CareerMind
           </Link>
 
+          {/*
+            Tab order follows the user-facing workflow: Goals (where
+            you start) → Overview (rolled-up patterns) → Strategy →
+            Action Plan → History. New users land on Goals via the
+            login redirect; Overview only pays off once analyses exist.
+          */}
           <div className="flex items-center gap-6 flex-1 min-w-0 overflow-x-auto">
-            <Link href="/dashboard" className={tabClass("/dashboard")}>
-              Overview
-            </Link>
             <Link
               href="/dashboard/goals"
               className={tabClass("/dashboard/goals")}
             >
               Goals
+            </Link>
+            <Link href="/dashboard" className={tabClass("/dashboard")}>
+              Overview
             </Link>
             <Link
               href="/dashboard/strategy-v2"

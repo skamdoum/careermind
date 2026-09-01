@@ -146,7 +146,7 @@ export default function NewGoalPage() {
               id="goal-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Include the type of role, scope, domain, or career direction you want to pursue."
+              placeholder="Include the type of role, scope, domain, or direction you want to pursue."
               className={INPUT_CLASS + " leading-6"}
               rows={5}
               maxLength={2000}

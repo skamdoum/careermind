@@ -1,6 +1,12 @@
 import * as React from "react";
 
-export type CardIntent = "default" | "success" | "caution" | "danger" | "info";
+export type CardIntent =
+  | "default"
+  | "success"
+  | "caution"
+  | "danger"
+  | "info"
+  | "warm";
 export type CardPadding = "sm" | "md" | "lg";
 
 type CardProps = {
@@ -22,6 +28,12 @@ const INTENT_CLASSES: Record<CardIntent, string> = {
     "bg-[color:var(--color-danger-bg)] border-[color:var(--color-danger-border)] text-[color:var(--color-danger-text)]",
   info:
     "bg-[color:var(--color-info-bg)] border-[color:var(--color-info-border)] text-[color:var(--color-info-text)]",
+  // Warm terracotta surface — reserved for prioritized-focus intelligence
+  // (Recommended Focus card). Body text stays primary; the eyebrow
+  // above the surface can use the warm-accent color for its label to
+  // signal "this is the earned warm moment on this page."
+  warm:
+    "bg-[color:var(--color-warm-bg)] border-[color:var(--color-warm-border)] text-[color:var(--color-text-primary)]",
 };
 
 const PADDING_CLASSES: Record<CardPadding, string> = {

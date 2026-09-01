@@ -54,7 +54,7 @@ export default function EditCareerProfilePage({ params }: PageProps) {
         if (cancelled) return;
 
         if (!res.ok || !json?.success) {
-          setLoadError(json?.error || "Failed to load career profile");
+          setLoadError(json?.error || "Failed to load job search");
           setLoadStatus("error");
           return;
         }
@@ -66,7 +66,7 @@ export default function EditCareerProfilePage({ params }: PageProps) {
       } catch (e: unknown) {
         if (cancelled) return;
         setLoadError(
-          e instanceof Error ? e.message : "Failed to load career profile"
+          e instanceof Error ? e.message : "Failed to load job search"
         );
         setLoadStatus("error");
       }
@@ -127,7 +127,7 @@ export default function EditCareerProfilePage({ params }: PageProps) {
         <Link href="/dashboard" className="text-[13px] text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]">
           ← Back
         </Link>
-        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">Edit career profile</h1>
+        <h1 className="text-[24px] font-semibold tracking-[-0.01em]">Edit job search</h1>
       </div>
 
       {loadStatus === "loading" && (
@@ -136,7 +136,7 @@ export default function EditCareerProfilePage({ params }: PageProps) {
 
       {loadStatus === "not_found" && (
         <section className="rounded-[6px] border border-dashed border-[color:var(--color-border-standard)] bg-[color:var(--color-surface-elevated)] p-8 text-center space-y-3">
-          <h2 className="font-semibold text-lg">Career profile not found</h2>
+          <h2 className="font-semibold text-lg">Job search not found</h2>
           <Link
             href="/dashboard"
             className="inline-flex items-center rounded-[6px] bg-[color:var(--color-accent-ink)] px-4 py-2 text-[13px] font-medium text-white hover:opacity-90"

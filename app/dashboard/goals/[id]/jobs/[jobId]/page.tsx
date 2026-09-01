@@ -398,9 +398,9 @@ export default function TargetJobDetailPage({ params }: PageProps) {
                   href="/analyze"
                   className="underline underline-offset-2 font-medium"
                 >
-                  Upload a resume
-                </Link>
-                , then come back to analyze this role.
+                  Upload one
+                </Link>{" "}
+                — you upload it once and use it across every target role.
               </div>
             </Card>
           )}
@@ -465,7 +465,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             {analyses !== null && analyses.length === 0 && !analysesError && (
               <EmptyState
                 title="No analyses yet"
-                description="Run your first analysis for this role."
+                description="Analyzing this role adds evidence to your goal's cross-role patterns and feeds your Action Plan. Click Analyze this role above to run the first one."
               />
             )}
 

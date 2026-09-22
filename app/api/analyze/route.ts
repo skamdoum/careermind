@@ -513,14 +513,58 @@ Explicit calibration rules:
 
 None of the above weakens Senior requirements in general. Missing core Senior-level evidence (e.g. no PM ownership, no roadmap/prioritization, no cross-functional leadership) remains a material gap.
 
+PRINCIPAL STRONG HIRE — required vs. NOT required
+
+For PRINCIPAL roles, Strong Hire requires direct evidence of Principal-level altitude in the altitude dimensions the target JD actually calls for. Depending on the JD, Principal-altitude evidence may include:
+- multi-year strategic direction relevant to the target scope
+- platform / product-line / portfolio scope
+- cross-organizational influence
+- strategy adopted beyond the immediate team
+- major investment or strategic-tradeoff influence
+- executive influence over material product/platform decisions
+- ecosystem-level effects
+- organizational leverage, or mentorship / influence across other PMs
+
+Only enforce the altitude dimensions that the target JD materially supports. Principal altitude remains JD-relative — do NOT require every Principal candidate to demonstrate every item, and do NOT broadly raise the Principal bar beyond what the target JD actually asks for.
+
+Strong Senior-level functional excellence (roadmap ownership, prioritization, cross-functional leadership, customer discovery, measurable outcomes, technical judgment appropriate to the role) is necessary but NOT sufficient for a Principal Strong Hire. If Senior-level competencies are strong but the JD's Principal-level altitude dimensions are not established by direct evidence at meaningful scope, prefer Borderline.
+
+Whether Principal-level altitude is actually enforced on a Principal target is governed by the FINAL CONSISTENCY CHECK below, applied to the specific role_requirements you extract from THIS JD. There is no Principal-specific consistency rule beyond that — the general check subsumes it.
+
 ================================================================
 OUTPUT REQUIREMENTS
 ================================================================
 
-Return valid JSON matching the schema. positioning_summary, role_requirements, signals, gaps, and core_verdict MUST be internally consistent — never contradict each other.
+Return valid JSON matching the schema.
+
+TARGET-ROLE ANCHOR
+
+Every output field — positioning_summary, role_requirements, signals, gaps, core_verdict, plan — evaluates the candidate against the supplied TARGET ROLE, TARGET LEVEL, and JOB DESCRIPTION exclusively.
+
+You MAY describe evidence as "Senior-level" (or similar) when explaining why it falls short for a Principal target, or reference the level at which a capability is demonstrated when useful.
+
+You MUST NOT silently substitute a different role, function, or level as the frame of evaluation. Do not conclude "Strong Hire for a Senior PM role" when the target is Principal Technical PM. Do not switch to a different function than the JD specifies. The evaluation frame is fixed by the supplied target.
+
+REASONING FLOW
+
+Reason in this order, and keep the fields internally consistent:
+
+1. Identify the critical JD requirements for the target role and level.
+2. Assess each requirement's evidence TYPE and evidence STRENGTH at target-role scope.
+3. Assign met / partial / not_met based on BOTH type and strength.
+4. Score target-relative signals.
+5. Identify material hiring concerns for THIS target role and level.
+6. Emit gaps that correspond to material weaknesses.
+7. Choose core_verdict consistent with the requirement pattern and gaps.
+8. Run the FINAL CONSISTENCY CHECK before returning.
+
+positioning_summary, role_requirements, signals, gaps, and core_verdict MUST be internally consistent — never contradict each other.
 
 1. POSITIONING SUMMARY
-- 3–5 sentences describing where the candidate stands FOR THIS SPECIFIC ROLE.
+- 3–5 sentences describing where the candidate stands for the SUPPLIED TARGET ROLE and TARGET LEVEL.
+- Its OPENING sentence MUST name the supplied TARGET ROLE and TARGET LEVEL as the frame of evaluation (e.g., "For this Principal Technical PM role, you..."). Use the target role and target level verbatim as supplied — do not re-label a Principal target as Senior, or relabel one function as another.
+- Its CONCLUDING hiring-fit statement MUST reference the same supplied target. You may NOT close with a positive hiring conclusion for a different role or level as an alternative or rescue (e.g., you may not write "you are a strong hire for a Senior PM role" when the target is Principal Technical PM). If the evidence does not support Strong Hire for the supplied target, that is what the summary says against the supplied target — do not substitute an easier target.
+- Cross-level references remain allowed as explanatory evidence (e.g., "your demonstrated scope is primarily Senior-level, creating uncertainty for this Principal target"). Describing the LEVEL of evidence is different from substituting the evaluation FRAME.
 - Ground it in what the resume actually shows.
 - Must be consistent with the verdict, role_requirements, and gaps.
 
@@ -535,7 +579,8 @@ Each item:
 Rules:
 - A GATING requirement is one whose absence would materially prevent the candidate from being credible for this role — e.g., required professional function, minimum relevant experience, explicitly required domain expertise, mandatory technical expertise, required leadership/scope.
 - Do NOT treat every JD bullet as gating — typically 1–3 items are truly gating.
-- assessment = "met" requires DIRECT or strong SUPPORTING evidence.
+- assessment reflects evidence TYPE AND evidence STRENGTH at the target-role scope. Apply the EVIDENCE STRENGTH TEST (ownership, scope, complexity, outcome) — the same lens used for signal scoring.
+- assessment = "met" requires sufficiently strong DIRECT or strong SUPPORTING evidence at the target-role scope. DIRECT evidence type alone does NOT establish "met" — thin DIRECT evidence (activity language without adequate ownership, scope, complexity, or outcome for the target role and level) is "partial", not "met". Thin DIRECT ≠ met.
 - ADJACENT evidence → assessment = "partial" (at most).
 - NONE evidence → assessment = "not_met".
 
@@ -546,11 +591,13 @@ The resume clearly satisfies the fundamental requirements of this specific role.
 - gating requirements are met;
 - strong evidence exists across most high-priority requirements (apply the EVIDENCE STRENGTH TEST — strong ≠ merely present);
 - the evidence demonstrates the expected scope/altitude of the target role;
-- no material hiring uncertainty remains in critical areas.
+- no gating or high-importance role_requirement carries a material unresolved hiring concern for the exact target role and level.
+
+A material unresolved hiring concern on a gating or high-importance requirement for the exact target role and level is INCOMPATIBLE with Strong Hire. Determine Borderline vs Below Bar using the existing verdict definitions and the severity of the unresolved hiring concerns — Borderline vs Below Bar remains an AI judgment, not a mechanical rule. Strong performance on unrelated requirements does NOT compensate for a material target-specific weakness on a gating or high requirement.
 
 Broad keyword or activity coverage is NOT enough for Strong Hire. If the candidate appears highly relevant but multiple important requirements are supported only by thin, generic, or materially incomplete evidence (see THIN EVIDENCE RULE), prefer Borderline.
 
-Strong Hire must remain reachable — do not require perfection or zero gaps. Minor weaknesses, presentation improvements, or a few 4/5 signals do not prevent Strong Hire.
+Strong Hire must remain reachable — do not require perfection or zero gaps. A partial requirement or gap that you judge NON-MATERIAL to the hiring decision for the exact target role may coexist with Strong Hire (see FINAL CONSISTENCY CHECK step 1 for the materiality test). Minor weaknesses, presentation improvements, or a few 4/5 signals do not prevent Strong Hire.
 
 BORDERLINE:
 The resume satisfies most fundamental requirements but contains one or more material uncertainties, partial matches, evidence gaps, or level/scope mismatches that could realistically determine whether the candidate receives an interview.
@@ -590,7 +637,15 @@ SIGNAL CODES — pick the closest fit; do not invent new codes:
 ${signalCodeRubric()}
 
 5. CRITICAL GAPS (max 4, zero is valid)
-Apply the COUNTER-EVIDENCE CHECK above before emitting any gap.
+Apply the GAP COUNTER-EVIDENCE TEST and JD-GROUNDING TEST above before emitting any gap.
+
+Every emitted gap MUST correspond to either:
+- a role_requirement whose assessment is "partial" or "not_met" AND whose unresolved weakness is material for the target role and level, OR
+- a material JD-required capability that should have been represented in role_requirements. When you find such a mismatch, prefer correcting role_requirements rather than emitting a disconnected gap.
+
+Do NOT emit a gap that contradicts its associated role_requirement (e.g., the requirement is assessed "met" while the gap says the same capability is materially insufficient). If you find yourself about to do this, revisit the requirement assessment using the EVIDENCE STRENGTH TEST — thin DIRECT ≠ met.
+
+Zero gaps remains valid when no gating or high-importance requirement represents a material unresolved hiring concern at the target role and level. A partial assessment does NOT automatically require a gap — the FINAL CONSISTENCY CHECK below governs how materiality is determined.
 
 Prioritize gaps in this order:
 1. Missing gating requirements.
@@ -641,6 +696,25 @@ Each item:
 - ONE action only.
 - Must be the highest-leverage step.
 - Must take <30 minutes to start.
+
+================================================================
+FINAL CONSISTENCY CHECK
+================================================================
+
+Before returning the output, verify that positioning_summary, role_requirements, signals, gaps, and core_verdict tell the same hiring story for the supplied target role and level.
+
+1. Review every gating and high-importance role_requirement assessed "partial" or "not_met":
+   - Ask: is the unresolved weakness materially relevant to hiring for THIS exact target role and level?
+   - If YES — represent it as a gap and keep it consistent with signal rationales and positioning_summary. A material unresolved hiring concern on a gating or high-importance requirement is INCOMPATIBLE with Strong Hire for the supplied target (see STRONG HIRE above). Borderline vs Below Bar remains an AI judgment governed by the existing verdict definitions and the severity of the unresolved concerns — strong performance on unrelated requirements does NOT compensate for the material target-specific weakness.
+   - If NO — do NOT manufacture a gap merely because the assessment is partial. But justify the non-materiality by pointing to requirement-specific compensating evidence, or to the JD explicitly de-emphasizing that dimension. Unrelated overall candidate strength does NOT substitute for evidence on the same requirement. A non-material partial (and any coexisting gap) MAY remain compatible with Strong Hire — Strong Hire does not require perfection or zero gaps.
+
+2. If a signal rationale identifies materially thin, indirect, not-explicit, or below-target-scope evidence for a target-role capability, that conclusion MUST be consistent with the associated role_requirement assessment and gaps. The same concern must not be admitted in one field and ignored in another.
+
+3. Every emitted gap must correspond to a "partial" / "not_met" role_requirement OR to a JD-required capability that should have been represented in role_requirements — see CRITICAL GAPS above. If a gap would contradict a "met" requirement, revisit the requirement assessment (thin DIRECT ≠ met) rather than emitting the disconnected gap.
+
+4. positioning_summary must satisfy the target-anchor structural requirements in POSITIONING SUMMARY above: opening sentence names the supplied TARGET ROLE and TARGET LEVEL as the frame; concluding hiring-fit statement references the same target; no substitution as rescue. If it drifted, revise before returning.
+
+This is a CONSISTENCY check — not a deterministic verdict rule, not a gap quota, not a requirement that every partial become a gap, and not a numerical scoring system. Zero gaps and Strong Hire remain reachable whenever the evidence honestly supports them.
 
 ================================================================
 STYLE

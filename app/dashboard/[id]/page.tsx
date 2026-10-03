@@ -9,6 +9,7 @@ import MetaStrip from "@/app/components/ui/MetaStrip";
 import VerdictHero from "@/app/components/ui/VerdictHero";
 import SignalRow from "@/app/components/ui/SignalRow";
 import GapRow from "@/app/components/ui/GapRow";
+import InvestigateGapButton from "./investigate-gap-button";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,16 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
+
+  // Persisted gap rows carry the ids we need to seed an investigation.
+  // Ordered by priority ascending — the analyze route inserts them in
+  // that order (arrayIndex+1), so this matches the raw_json.gaps array.
+  const { data: gapRows } = await supabase
+    .from("gaps")
+    .select("id, gap_code, gap_title, gap_description, priority")
+    .eq("analysis_id", id)
+    .eq("user_id", user.id)
+    .order("priority", { ascending: true });
 
   const data = analysis.raw_json as {
     core_verdict?: string;
@@ -213,15 +224,28 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
 
         {data?.gaps && data.gaps.length > 0 ? (
           <div className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] divide-y divide-[color:var(--color-border-subtle)] overflow-hidden">
-            {data.gaps.map((g, i) => (
-              <GapRow
-                key={i}
-                title={g.gap_title || g.title || `Gap ${i + 1}`}
-                description={g.gap_description || g.description}
-                severity={g.severity}
-                recommendedFix={g.recommended_fix}
-              />
-            ))}
+            {data.gaps.map((g, i) => {
+              // Zip raw_json.gaps (has severity + recommended_fix) with
+              // persisted gap rows (has id) by array position. The
+              // analyze route persists in prioritized order, so index
+              // matching is safe.
+              const persisted = gapRows?.[i];
+              return (
+                <div key={persisted?.id ?? i}>
+                  <GapRow
+                    title={g.gap_title || g.title || `Gap ${i + 1}`}
+                    description={g.gap_description || g.description}
+                    severity={g.severity}
+                    recommendedFix={g.recommended_fix}
+                  />
+                  {persisted?.id && (
+                    <div className="px-4 pb-3">
+                      <InvestigateGapButton gapId={persisted.id} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="text-[13px] text-[color:var(--color-text-muted)]">

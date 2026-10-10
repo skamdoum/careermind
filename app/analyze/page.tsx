@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { retryKey } from "@/lib/ai-operations/client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppShell from "@/app/components/app-shell";
@@ -131,20 +132,14 @@ export default function AnalyzePage() {
     setResult(null);
 
     try {
+      const payload = {
+        resumeText, jobDescription, targetRole: "PM", targetLevel: "Senior",
+        resume_id: latestResume?.id ?? null,
+      };
+      const retry = await retryKey(`analyze:${userId}`, payload);
       const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          resumeText,
-          jobDescription,
-          targetRole: "PM",
-          targetLevel: "Senior",
-          // The server always resolves the actual file from this id
-          // against the user + active career profile. Client-supplied
-          // file_path / file_name metadata is deliberately not sent.
-          resume_id: latestResume?.id ?? null,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": retry.key },
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -155,11 +150,12 @@ export default function AnalyzePage() {
           return;
         }
 
-        setStatus(data.error || "Analyze failed");
-        setResult({ error: data.error || "Analyze failed" });
+        setStatus(data.message || data.error || "Analyze failed");
+        setResult({ error: data.message || data.error || "Analyze failed" });
         return;
       }
 
+      retry.clear();
       setStatus("Analysis complete");
       setResult(data.data?.result);
     } catch (error) {

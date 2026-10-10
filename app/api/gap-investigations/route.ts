@@ -1,16 +1,26 @@
+import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import {
-  AGENT_MODEL_NAME,
   runAgentTurn,
   uploadResumeFileForInvestigation,
 } from "@/lib/gap-investigation/agent";
 import {
   InvestigationContextSnapshot,
-  persistCandidateEvidence,
 } from "@/lib/db/gap-investigations";
+import {
+  operationErrorResponse,
+  operationUsageHeaders,
+  claimOperation,
+  lookupOperation,
+  requestKey,
+  inputHash,
+  operationResponse,
+  finishOperation,
+  operationLifecycle,
+  operationRpc,
+} from "@/lib/ai-operations/server";
 
 // POST /api/gap-investigations
 // Body: { gap_id: string }
@@ -34,11 +44,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const activeProfile = await resolveActiveCareerProfile(
-      supabase,
-      user.id
-    );
-
     const body = await req.json().catch(() => ({}));
     const gapId =
       typeof body?.gap_id === "string" ? body.gap_id.trim() : "";
@@ -49,310 +54,212 @@ export async function POST(req: Request) {
       );
     }
 
-    // Load the seed gap (RLS-scoped to the caller).
-    const { data: seedGap, error: gapErr } = await supabase
-      .from("gaps")
-      .select(
-        "id, analysis_id, user_id, gap_code, gap_title, gap_description, recommended_fix, priority"
-      )
-      .eq("id", gapId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (gapErr) {
-      return NextResponse.json(
-        { success: false, error: gapErr.message },
-        { status: 500 }
-      );
+    const key = requestKey(req);
+    const hash = inputHash([gapId]);
+    const existing = await lookupOperation(user.id, "gap_kickoff", key, hash);
+    if (existing) {
+      const replay = operationResponse(existing, "gap_kickoff");
+      if (replay) return replay;
     }
-    if (!seedGap) {
-      return NextResponse.json(
-        { success: false, error: "Gap not found" },
-        { status: 404 }
-      );
-    }
+    let operationContext = existing?.context;
+    if (!operationContext) {
+      const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
 
-    // Load the analysis this gap belongs to. It must belong to the
-    // active career profile — otherwise refuse (context would be stale).
-    const { data: analysis, error: analysisErr } = await supabase
-      .from("analyses")
-      .select(
-        "id, raw_json, summary, career_profile_id, career_goal_id, job_description_id, resume_id"
-      )
-      .eq("id", seedGap.analysis_id)
-      .eq("user_id", user.id)
-      .eq("career_profile_id", activeProfile.id)
-      .maybeSingle();
-
-    if (analysisErr) {
-      return NextResponse.json(
-        { success: false, error: analysisErr.message },
-        { status: 500 }
-      );
-    }
-    if (!analysis) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Analysis for this gap is not available under the active job search.",
-        },
-        { status: 404 }
-      );
-    }
-
-    // Resolve target role/level via career_goal + job_description.
-    let targetRole = "PM";
-    let targetLevel = "Senior";
-    if (analysis.job_description_id) {
-      const { data: job } = await supabase
-        .from("job_descriptions")
-        .select("id, role_title, career_goal_id")
-        .eq("id", analysis.job_description_id)
+      // Load the seed gap (RLS-scoped to the caller).
+      const { data: seedGap, error: gapErr } = await supabase
+        .from("gaps")
+        .select(
+          "id, analysis_id, user_id, gap_code, gap_title, gap_description, recommended_fix, priority"
+        )
+        .eq("id", gapId)
         .eq("user_id", user.id)
         .maybeSingle();
-      if (job?.role_title) targetRole = job.role_title;
-    }
-    if (analysis.career_goal_id) {
-      const { data: goal } = await supabase
-        .from("career_goals")
-        .select("id, target_level, target_function")
-        .eq("id", analysis.career_goal_id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (goal?.target_level) targetLevel = goal.target_level;
-      if (goal?.target_function && targetRole === "PM") {
-        targetRole = goal.target_function;
-      }
-    }
 
-    // Resolve the resume tied to this analysis. Preferred: the resume
-    // that was actually sent to the analyzer.
-    let resumeRow: {
-      id: string;
-      file_path: string;
-      file_name: string | null;
-      mime_type: string | null;
-    } | null = null;
-
-    if (analysis.resume_id) {
-      const { data: r } = await supabase
-        .from("resumes")
-        .select("id, file_path, file_name, mime_type")
-        .eq("id", analysis.resume_id)
-        .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
-        .maybeSingle();
-      if (r) resumeRow = r;
-    }
-
-    // Fall back to the newest resume for this profile if the analysis
-    // pre-dated resume_id (older rows).
-    if (!resumeRow) {
-      const { data: r } = await supabase
-        .from("resumes")
-        .select("id, file_path, file_name, mime_type")
-        .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (r) resumeRow = r;
-    }
-
-    // Related signals: same-analysis signals whose code semantically
-    // relates to this gap code. V1 keeps this loose — same code, or a
-    // few well-known adjacencies.
-    const analysisRaw = (analysis.raw_json ?? {}) as {
-      positioning_summary?: string;
-      signals?: Array<{
-        signal_code?: string;
-        signal_name?: string;
-        name?: string;
-        score?: number;
-        rationale?: string;
-        reasoning?: string;
-      }>;
-    };
-    const relatedSignals = pickRelatedSignals(
-      analysisRaw.signals ?? [],
-      seedGap.gap_code
-    );
-
-    const contextSnapshot: InvestigationContextSnapshot = {
-      gap: {
-        gap_code: seedGap.gap_code ?? null,
-        gap_title: seedGap.gap_title ?? "Gap",
-        gap_description: seedGap.gap_description ?? "",
-        recommended_fix: seedGap.recommended_fix ?? null,
-        severity: null,
-      },
-      target: {
-        role: targetRole,
-        level: targetLevel,
-      },
-      analysis: {
-        id: analysis.id as string,
-        positioning_summary:
-          analysisRaw.positioning_summary ??
-          (analysis.summary as string | null) ??
-          null,
-        related_signals: relatedSignals,
-      },
-      resume: {
-        id: resumeRow?.id ?? null,
-        file_name: resumeRow?.file_name ?? null,
-      },
-    };
-
-    // Upload the resume file to OpenAI ONCE at kickoff. Reused on every
-    // subsequent turn via the file_id cached on the investigation row.
-    let openaiResumeFileId: string | null = null;
-    if (resumeRow) {
-      const { data: fileData, error: dlErr } = await supabaseAdmin.storage
-        .from("resumes")
-        .download(resumeRow.file_path);
-      if (dlErr) {
+      if (gapErr) {
         return NextResponse.json(
-          { success: false, error: `Resume download failed: ${dlErr.message}` },
+          { success: false, error: gapErr.message },
           { status: 500 }
         );
       }
-      openaiResumeFileId = await uploadResumeFileForInvestigation({
-        blob: fileData,
-        fileName: resumeRow.file_name || "resume.pdf",
-        mimeType: resumeRow.mime_type || "application/octet-stream",
-      });
-    }
+      if (!seedGap) {
+        return NextResponse.json(
+          { success: false, error: "Gap not found" },
+          { status: 404 }
+        );
+      }
 
-    // Create the investigation row with the frozen context snapshot.
-    const { data: created, error: createErr } = await supabaseAdmin
-      .from("gap_investigations")
-      .insert({
-        user_id: user.id,
-        career_profile_id: activeProfile.id,
-        seed_gap_id: seedGap.id,
-        seed_analysis_id: analysis.id,
-        gap_code: seedGap.gap_code ?? null,
-        context_snapshot: contextSnapshot,
-        status: "active",
-        model_name: AGENT_MODEL_NAME,
-        openai_resume_file_id: openaiResumeFileId,
-        turn_count: 0,
-      })
-      .select()
-      .single();
+      // Load the analysis this gap belongs to. It must belong to the
+      // active career profile — otherwise refuse (context would be stale).
+      const { data: analysis, error: analysisErr } = await supabase
+        .from("analyses")
+        .select(
+          "id, raw_json, summary, career_profile_id, career_goal_id, job_description_id, resume_id"
+        )
+        .eq("id", seedGap.analysis_id)
+        .eq("user_id", user.id)
+        .eq("career_profile_id", activeProfile.id)
+        .maybeSingle();
 
-    if (createErr || !created) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: createErr?.message || "Failed to create investigation",
+      if (analysisErr) {
+        return NextResponse.json(
+          { success: false, error: analysisErr.message },
+          { status: 500 }
+        );
+      }
+      if (!analysis) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Analysis for this gap is not available under the active job search.",
+          },
+          { status: 404 }
+        );
+      }
+
+      // Resolve target role/level via career_goal + job_description.
+      let targetRole = "PM";
+      let targetLevel = "Senior";
+      if (analysis.job_description_id) {
+        const { data: job } = await supabase
+          .from("job_descriptions")
+          .select("id, role_title, career_goal_id")
+          .eq("id", analysis.job_description_id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (job?.role_title) targetRole = job.role_title;
+      }
+      if (analysis.career_goal_id) {
+        const { data: goal } = await supabase
+          .from("career_goals")
+          .select("id, target_level, target_function")
+          .eq("id", analysis.career_goal_id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (goal?.target_level) targetLevel = goal.target_level;
+        if (goal?.target_function && targetRole === "PM") {
+          targetRole = goal.target_function;
+        }
+      }
+
+      // Resolve the resume tied to this analysis. Preferred: the resume
+      // that was actually sent to the analyzer.
+      let resumeRow: {
+        id: string;
+        file_path: string;
+        file_name: string | null;
+        mime_type: string | null;
+      } | null = null;
+
+      if (analysis.resume_id) {
+        const { data: r } = await supabase
+          .from("resumes")
+          .select("id, file_path, file_name, mime_type")
+          .eq("id", analysis.resume_id)
+          .eq("user_id", user.id)
+          .eq("career_profile_id", activeProfile.id)
+          .maybeSingle();
+        if (r) resumeRow = r;
+      }
+
+      // Fall back to the newest resume for this profile if the analysis
+      // pre-dated resume_id (older rows).
+      if (!resumeRow) {
+        const { data: r } = await supabase
+          .from("resumes")
+          .select("id, file_path, file_name, mime_type")
+          .eq("user_id", user.id)
+          .eq("career_profile_id", activeProfile.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (r) resumeRow = r;
+      }
+
+      // Related signals: same-analysis signals whose code semantically
+      // relates to this gap code. V1 keeps this loose — same code, or a
+      // few well-known adjacencies.
+      const analysisRaw = (analysis.raw_json ?? {}) as {
+        positioning_summary?: string;
+        signals?: Array<{
+          signal_code?: string;
+          signal_name?: string;
+          name?: string;
+          score?: number;
+          rationale?: string;
+          reasoning?: string;
+        }>;
+      };
+      const relatedSignals = pickRelatedSignals(
+        analysisRaw.signals ?? [],
+        seedGap.gap_code
+      );
+
+      const contextSnapshot: InvestigationContextSnapshot = {
+        gap: {
+          gap_code: seedGap.gap_code ?? null,
+          gap_title: seedGap.gap_title ?? "Gap",
+          gap_description: seedGap.gap_description ?? "",
+          recommended_fix: seedGap.recommended_fix ?? null,
+          severity: null,
         },
-        { status: 500 }
-      );
-    }
-
-    // Run the kickoff agent turn — reads the resume, extracts initial
-    // resume-source evidence, produces the opening question.
-    let agentOut;
-    try {
-      agentOut = await runAgentTurn({
-        context: contextSnapshot,
-        transcript: [],
-        evidence: [],
-        turn_count: 0,
-        openai_resume_file_id: openaiResumeFileId,
-        is_kickoff: true,
-        prior_dimension_coverage: null,
-        prior_decision_state: null,
-      });
-    } catch (agentErr: unknown) {
-      // Roll back the investigation row so the user doesn't see a
-      // half-created investigation with no first question.
-      await supabaseAdmin
-        .from("gap_investigations")
-        .delete()
-        .eq("id", created.id);
-      const msg =
-        agentErr instanceof Error ? agentErr.message : "Agent kickoff failed";
-      return NextResponse.json(
-        { success: false, error: msg },
-        { status: 502 }
-      );
-    }
-
-    // Persist first assistant turn.
-    const assistantContent =
-      agentOut.action === "ask_question"
-        ? agentOut.next_question
-        : agentOut.conclusion?.summary || "(investigation concluded)";
-
-    const { data: firstTurn, error: turnErr } = await supabaseAdmin
-      .from("gap_investigation_turns")
-      .insert({
-        investigation_id: created.id,
-        user_id: user.id,
-        role: "assistant",
-        content: assistantContent,
-        structured: agentOut,
-        turn_index: 0,
-      })
-      .select()
-      .single();
-
-    if (turnErr || !firstTurn) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: turnErr?.message || "Failed to persist first turn",
+        target: {
+          role: targetRole,
+          level: targetLevel,
         },
-        { status: 500 }
-      );
-    }
+        analysis: {
+          id: analysis.id as string,
+          positioning_summary:
+            analysisRaw.positioning_summary ??
+            (analysis.summary as string | null) ??
+            null,
+          related_signals: relatedSignals,
+        },
+        resume: {
+          id: resumeRow?.id ?? null,
+          file_name: resumeRow?.file_name ?? null,
+        },
+      };
 
-    // Persist any kickoff evidence (typically source_type = "resume").
-    // Kickoff transcript is empty from the model's POV; only the assistant
-    // turn just written exists, and there are no user turns to reference.
-    await persistCandidateEvidence({
-      investigationId: created.id as string,
-      userId: user.id,
-      transcriptTurnIds: [],
-      transcript: [],
-      candidateEvidence: agentOut.candidate_evidence,
+      operationContext = { career_profile_id: activeProfile.id, seed_gap_id: seedGap.id, seed_analysis_id: analysis.id, gap_code: seedGap.gap_code ?? null, snapshot: contextSnapshot, resume: resumeRow };
+    }
+    const claimed = await claimOperation(user.id, {
+      kind: "gap_kickoff", key, hash,
+      context: operationContext,
     });
-
-    // If the agent stopped on kickoff (unusual but permitted), transition.
-    if (agentOut.action === "stop_and_conclude") {
-      await supabaseAdmin
-        .from("gap_investigations")
-        .update({
-          status: "concluded",
-          conclusion: agentOut.conclusion.classification,
-          conclusion_summary: agentOut.conclusion.summary,
-          remaining_uncertainty: agentOut.conclusion.remaining_uncertainty,
-          underlying_capability: agentOut.conclusion.underlying_capability,
-          resume_evidence: agentOut.conclusion.resume_evidence,
-          target_role_fit: agentOut.conclusion.target_role_fit,
-          residual_gap: agentOut.conclusion.residual_gap,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", created.id);
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        investigation_id: created.id,
+    const early = operationResponse(claimed, "gap_kickoff");
+    if (early) return early;
+    if (claimed.outcome !== "claimed") throw new Error("Operation not claimed");
+    const data = await finishOperation(claimed, {
+      ...operationLifecycle(user.id, claimed),
+      generate: async () => {
+        const resume = claimed.context.resume;
+        let fileId: string | null = null;
+        if (resume) {
+          const { data: blob, error } = await supabase.storage.from("resumes").download(resume.file_path);
+          if (error || !blob) throw new Error("Resume download failed");
+          fileId = await uploadResumeFileForInvestigation({ blob, fileName: resume.file_name || "resume.pdf", mimeType: resume.mime_type || "application/octet-stream" });
+        }
+        const agent = await runAgentTurn({
+          context: claimed.context.snapshot!, transcript: [], evidence: [], turn_count: 0,
+          openai_resume_file_id: fileId, is_kickoff: true,
+          prior_dimension_coverage: null, prior_decision_state: null,
+        });
+        return { agent, file_id: fileId };
       },
+      finalize: () => operationRpc(user.id, "finalize_career_gap", { p_id: claimed.id, p_token: claimed.token }),
     });
+    return NextResponse.json({ success: true, data }, { headers: operationUsageHeaders(claimed) });
+
   } catch (err: unknown) {
+    const operationError = operationErrorResponse(err);
+    if (operationError) return operationError;
     const msg =
       err instanceof Error ? err.message : "Failed to start investigation";
     console.error("[gap-investigations] POST error:", err);
     return NextResponse.json(
       { success: false, error: msg },
-      { status: 500 }
+      { status: err instanceof OpenAI.APIError ? 502 : 500 }
     );
   }
 }

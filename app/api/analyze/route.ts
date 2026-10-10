@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
@@ -9,9 +8,24 @@ import {
   gapCodeRubric,
   signalCodeRubric,
 } from "@/lib/db/taxonomy";
+import {
+  operationErrorResponse,
+  operationUsageHeaders,
+  claimOperation,
+  lookupOperation,
+  requestKey,
+  inputHash,
+  operationResponse,
+  finishOperation,
+  operationLifecycle,
+  operationRpc,
+} from "@/lib/ai-operations/server";
+import { analysisRows } from "@/lib/ai-operations/analysis-rows";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: 60_000,
+  maxRetries: 0,
 });
 
 export async function POST(req: Request) {
@@ -30,13 +44,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // Resolve the active career profile once, up front, and keep it for the
-    // entire request. Never re-read mid-flight so a profile switch made during
-    // the analysis does not split ownership across two profiles.
-    const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
-    const activeProfileId = activeProfile.id;
-
     const body = await req.json();
+    const key = requestKey(req);
+    const hash = inputHash([body.resumeText ?? null, body.jobDescription ?? null, body.targetRole ?? null, body.targetLevel ?? null, body.resume_id ?? body.latestResume?.id ?? null, body.career_goal_id ?? null, body.job_description_id ?? null]);
+    const existing = await lookupOperation(user.id, "analyze", key, hash);
+    if (existing) {
+      const replay = operationResponse(existing, "analyze");
+      if (replay) return replay;
+    }
+    const activeProfile = existing?.context
+      ? { id: existing.context.career_profile_id }
+      : await resolveActiveCareerProfile(supabase, user.id);
+    const activeProfileId = activeProfile.id;
     const {
       resumeText,
       jobDescription,
@@ -74,11 +93,11 @@ export async function POST(req: Request) {
       );
     }
 
-    let effectiveJobDescription: string | undefined = jobDescription;
-    let effectiveTargetRole: string | undefined = targetRole;
-    let effectiveTargetLevel: string | undefined = targetLevel;
+    let effectiveJobDescription: string | undefined = existing?.context?.jobDescription ?? jobDescription;
+    let effectiveTargetRole: string | undefined = existing?.context?.targetRole ?? targetRole;
+    let effectiveTargetLevel: string | undefined = existing?.context?.targetLevel ?? targetLevel;
 
-    if (career_goal_id && job_description_id) {
+    if (career_goal_id && job_description_id && !existing) {
       const { data: goal, error: goalError } = await supabase
         .from("career_goals")
         .select("id, target_level, target_function")
@@ -142,7 +161,7 @@ export async function POST(req: Request) {
       .eq("user_id", user.id);
 
     const FREE_ANALYSIS_LIMIT = 100;
-    if ((count || 0) >= FREE_ANALYSIS_LIMIT) {
+    if (!existing && (count || 0) >= FREE_ANALYSIS_LIMIT) {
       return NextResponse.json(
         {
           success: false,
@@ -173,9 +192,9 @@ export async function POST(req: Request) {
       career_profile_id: string | null;
     };
 
-    let resolvedResume: ResumeRow | null = null;
+    let resolvedResume = (existing?.context?.resume ?? null) as ResumeRow | null;
 
-    if (clientResumeId) {
+    if (clientResumeId && !existing) {
       const { data: row, error: resumeErr } = await supabase
         .from("resumes")
         .select("id, file_path, file_name, mime_type, user_id, career_profile_id")
@@ -203,7 +222,7 @@ export async function POST(req: Request) {
       }
 
       resolvedResume = row as ResumeRow;
-    } else if (!resumeText) {
+    } else if (!resumeText && !existing) {
       // No explicit id and no pasted text — fall back to the newest resume
       // for this user + active profile. Mirrors /api/resumes/latest, but
       // done inline so it can never disagree with what the client last saw.
@@ -235,56 +254,72 @@ export async function POST(req: Request) {
       );
     }
 
-    const resumeContentParts: any[] = [];
-    let debugOpenAiFileId: string | null = null;
-
-    if (resolvedResume) {
-      const { data: fileData, error: downloadError } = await supabaseAdmin.storage
-        .from("resumes")
-        .download(resolvedResume.file_path);
-
-      if (downloadError) {
-        throw downloadError;
-      }
-
-      const bytes = Buffer.from(await fileData.arrayBuffer());
-
-      const openaiFile = await openai.files.create({
-        file: new File([bytes], resolvedResume.file_name || "resume.pdf", {
-          type: resolvedResume.mime_type || "application/octet-stream",
-        }),
-        purpose: "user_data",
-      });
-
-      debugOpenAiFileId = openaiFile.id;
-
-      resumeContentParts.push({
-        type: "input_file",
-        file_id: openaiFile.id,
-      });
-    }
-
-    // Isolate the resume source: only fall back to pasted text when no
-    // resume file was loaded. Never send both — stale pasted text alongside
-    // a fresh uploaded file could contaminate evidence grounding.
-    if (resumeContentParts.length === 0 && resumeText) {
-      resumeContentParts.push({
-        type: "input_text",
-        text: `RESUME TEXT:\n${resumeText}`,
-      });
-    }
-
-    // Safe debug trail — identifiers only, never resume contents.
-    console.log("[analyze] resume identity", {
-      user_id: user.id,
-      career_profile_id: activeProfileId,
-      client_resume_id: clientResumeId,
-      resolved_resume_id: resolvedResume?.id ?? null,
-      resolved_file_path: resolvedResume?.file_path ?? null,
-      resolved_file_name: resolvedResume?.file_name ?? null,
-      openai_file_id: debugOpenAiFileId,
-      used_resume_text_fallback: !resolvedResume && !!resumeText,
+    const claimed = await claimOperation(user.id, {
+      kind: "analyze", key, hash,
+      context: { career_profile_id: activeProfileId, career_goal_id: career_goal_id ?? null, job_description_id: job_description_id ?? null, resume: resolvedResume, resumeText: resumeText ?? null, jobDescription: effectiveJobDescription, targetRole: effectiveTargetRole ?? "PM", targetLevel: effectiveTargetLevel ?? "Senior" },
     });
+    const early = operationResponse(claimed, "analyze");
+    if (early) return early;
+    if (claimed.outcome !== "claimed") throw new Error("Operation not claimed");
+    // Always generate from the frozen context, even after profile/resume changes.
+    resolvedResume = (claimed.context.resume ?? null) as ResumeRow | null;
+    effectiveJobDescription = claimed.context.jobDescription;
+    effectiveTargetRole = claimed.context.targetRole;
+    effectiveTargetLevel = claimed.context.targetLevel;
+    const data = await finishOperation(claimed, {
+      ...operationLifecycle(user.id, claimed),
+      generate: async () => {
+        const resumeContentParts: OpenAI.Responses.ResponseInputContent[] = [];
+        let debugOpenAiFileId: string | null = null;
+
+        if (resolvedResume) {
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from("resumes")
+            .download(resolvedResume.file_path);
+
+          if (downloadError) {
+            throw downloadError;
+          }
+
+          const bytes = Buffer.from(await fileData.arrayBuffer());
+
+          const openaiFile = await openai.files.create({
+            file: new File([bytes], resolvedResume.file_name || "resume.pdf", {
+              type: resolvedResume.mime_type || "application/octet-stream",
+            }),
+            purpose: "user_data",
+          });
+
+          debugOpenAiFileId = openaiFile.id;
+
+          resumeContentParts.push({
+            type: "input_file",
+            file_id: openaiFile.id,
+          });
+        }
+
+        // Isolate the resume source: only fall back to pasted text when no
+        // resume file was loaded. Never send both — stale pasted text alongside
+        // a fresh uploaded file could contaminate evidence grounding.
+        if (resumeContentParts.length === 0 && claimed.context.resumeText) {
+          resumeContentParts.push({
+            type: "input_text",
+            text: `RESUME TEXT:\n${claimed.context.resumeText}`,
+          });
+        }
+
+        // Safe debug trail — identifiers only, never resume contents.
+        console.log("[analyze] resume identity", {
+          user_id: user.id,
+          career_profile_id: activeProfileId,
+          client_resume_id: clientResumeId,
+          resolved_resume_id: resolvedResume?.id ?? null,
+          resolved_file_path: resolvedResume?.file_path ?? null,
+          resolved_file_name: resolvedResume?.file_name ?? null,
+          openai_file_id: debugOpenAiFileId,
+          used_resume_text_fallback: !resolvedResume && !!claimed.context.resumeText,
+        });
+
     const response = await openai.responses.create({
       model: "gpt-4.1",
       input: [
@@ -892,207 +927,23 @@ Return only valid JSON.`,
         }
       }
     });
-
-    const content = response.output_text;
-    const parsed = JSON.parse(content);
-
-    // TODO(v2.3): Compute core_verdict deterministically from
-    // parsed.role_requirements (gating + high-importance assessments) rather
-    // than trusting the model's self-reported core_verdict. Per CLAUDE.md,
-    // deterministic logic should own verdicts; V2.1 and V2.2 intentionally
-    // isolate prompt/schema/grounding/calibration improvements so their
-    // effect can be measured independently before that mechanical layer is
-    // added. Deferred to V2.3 pending V2.2 regression measurement.
-
-    const { data: analysisRow, error: analysisError } = await supabaseAdmin
-      .from("analyses")
-      .insert({
-        user_id: user.id,
-        analysis_type: "initial_onboarding",
-        model_name: "gpt-4.1",
-        raw_json: parsed,
-        summary: parsed.positioning_summary,
-        status: "completed",
-        career_profile_id: activeProfileId,
-        career_goal_id: career_goal_id ?? null,
-        job_description_id: job_description_id ?? null,
-        // Persist the server-resolved resume id — not the client's — so the
-        // analysis row is always attributable to the file we actually sent.
-        resume_id: resolvedResume?.id ?? null,
-      })
-      .select()
-      .single();
-
-    if (analysisError) throw analysisError;
-
-    const analysisId = analysisRow.id;
-
-    if (parsed.signals?.length) {
-const normalizeRiskLevel = (value: unknown): "low" | "medium" | "high" => {
-  const v = String(value || "").trim().toLowerCase();
-
-  if (v === "low") return "low";
-  if (v === "medium") return "medium";
-  if (v === "high") return "high";
-
-  return "medium";
-};
-
-const normalizePriorityLabel = (value: unknown): "High" | "Medium" | "Low" => {
-  const v = String(value || "").trim().toLowerCase();
-
-  if (v === "high") return "High";
-  if (v === "medium") return "Medium";
-  if (v === "low") return "Low";
-
-  return "Medium";
-};
-
-const signalCodeSet = new Set<string>(SIGNAL_CODES);
-const normalizeSignalCode = (v: unknown): string | null => {
-  const raw = String(v || "").trim();
-  return signalCodeSet.has(raw) ? raw : null;
-};
-
-const signalRows = parsed.signals.map((s: any) => ({
-  analysis_id: analysisId,
-  user_id: user.id,
-  signal_code: normalizeSignalCode(s.signal_code),
-  signal_name: s.signal_name,
-  score: Math.max(1, Math.min(5, Number(s.score) || 1)),
-  rationale: s.rationale,
-  evidence: s.evidence,
-  risk_level: normalizeRiskLevel(s.risk_level),
-}));
-
- console.log("PARSED RESULT:", parsed);
- 
-      const { error } = await supabaseAdmin
-        .from("signal_assessments")
-        .insert(signalRows);
-
-      if (error) throw error;
-    }
-
-    if (parsed.gaps?.length) {
-      const gapCodeSet = new Set<string>(GAP_CODES);
-      const normalizeGapCode = (v: unknown): string | null => {
-        const raw = String(v || "").trim();
-        return gapCodeSet.has(raw) ? raw : null;
-      };
-
-      // Deterministic gap-priority normalization.
-      //
-      // The prompt already asks the model to arrange the `gaps` array in
-      // prioritized order (gating first, presentation last). The numeric
-      // `priority` field is a redundant echo — and observed to be unsafe:
-      // the model has emitted `priority: 0`, which trips the
-      // `gaps_priority_check` DB constraint (Postgres error 23514) and
-      // otherwise-valid analyses fail to persist.
-      //
-      // We re-derive priority from the array index so:
-      //   - the model's relative ordering is preserved exactly,
-      //   - 0 / negatives / duplicates / missing / non-numeric can never
-      //     reach the DB,
-      //   - stored priorities are always sequential positive integers
-      //     starting at 1,
-      //   - the value stays inside the same 1..5 clamp used by
-      //     `signal_assessments.score` and `plan_tasks.priority`.
-      //
-      // This mirrors the existing normalize-then-insert pattern used for
-      // signals and plan tasks. The DB constraint remains the last line
-      // of defense.
-      const normalizeGapPriority = (index: number): number =>
-        Math.max(1, Math.min(5, index + 1));
-
-      const gapRows = parsed.gaps.map((g: any, index: number) => ({
-        analysis_id: analysisId,
-        user_id: user.id,
-        gap_code: normalizeGapCode(g.gap_code),
-        gap_title: g.gap_title,
-        gap_description: g.gap_description,
-        priority: normalizeGapPriority(index),
-        recommended_fix: g.recommended_fix
-      }));
-
-      const { error } = await supabaseAdmin
-        .from("gaps")
-        .insert(gapRows);
-
-      if (error) throw error;
-    }
-
-    const { data: planRow, error: planError } = await supabaseAdmin
-      .from("plans")
-      .insert({
-        user_id: user.id,
-        analysis_id: analysisId,
-        plan_type: "initial",
-        next_best_action: parsed.plan.next_best_action
-      })
-      .select()
-      .single();
-
-    if (planError) throw planError;
-
-    if (parsed.plan?.tasks?.length) {
-      const allowedTaskTypes = new Set([
-        "resume",
-        "story",
-        "interview_prep",
-        "application",
-        "networking",
-        "strategy",
-      ]);
-
-      const normalizeTaskType = (value: unknown): string => {
-        const v = String(value || "").trim().toLowerCase();
-
-        if (allowedTaskTypes.has(v)) return v;
-
-        // simple fallback mapping
-        if (["branding", "positioning", "profile"].includes(v)) return "strategy";
-        if (["resume_edit", "resume_review", "cv"].includes(v)) return "resume";
-        if (["storytelling", "story_bank"].includes(v)) return "story";
-        if (["interview", "prep"].includes(v)) return "interview_prep";
-        if (["apply", "job_apply"].includes(v)) return "application";
-        if (["outreach", "reachout"].includes(v)) return "networking";
-
-        return "strategy";
-      };
-
-      const taskRows = parsed.plan.tasks.map((t: any) => ({
-        plan_id: planRow.id,
-        user_id: user.id,
-        title: t.title,
-        description: t.description,
-        priority: Math.max(1, Math.min(5, Number(t.priority) || 3)),
-        task_type: normalizeTaskType(t.task_type),
-        status: "not_started"
-      }));
-
-      const { error } = await supabaseAdmin
-        .from("plan_tasks")
-        .insert(taskRows);
-
-      if (error) throw error;
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        analysisId,
-        planId: planRow.id,
-        result: parsed,
+        return JSON.parse(response.output_text);
       },
+      finalize: (parsed) => operationRpc(user.id, "finalize_career_analysis", {
+        p_id: claimed.id, p_token: claimed.token, p_rows: analysisRows(parsed),
+      }),
     });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, data }, { headers: operationUsageHeaders(claimed) });
+
+  } catch (error: unknown) {
+    const operationError = operationErrorResponse(error);
+    if (operationError) return operationError;
     console.error("Analyze API error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: error?.message || "Something went wrong"
+        error: error instanceof Error ? error.message : "Something went wrong"
       },
       { status: 500 }
     );

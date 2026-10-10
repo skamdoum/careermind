@@ -16,7 +16,7 @@ import {
   UnderlyingCapabilityStatus,
 } from "@/lib/db/gap-investigations";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 0 });
 
 export const AGENT_MODEL_NAME = "gpt-4.1";
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { retryKey } from "@/lib/ai-operations/client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -20,19 +21,21 @@ export default function InvestigateGapButton({ gapId, className }: Props) {
     setBusy(true);
     setError(null);
     try {
+      const retry = await retryKey("gap_kickoff", { gap_id: gapId });
       const res = await fetch("/api/gap-investigations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": retry.key },
         body: JSON.stringify({ gap_id: gapId }),
       });
       const json = await res.json();
       if (!res.ok || !json?.success) {
-        throw new Error(json?.error || "Could not start investigation");
+        throw new Error(json?.message || json?.error || "Could not start investigation");
       }
       const investigationId = json.data?.investigation_id as string | undefined;
       if (!investigationId) {
         throw new Error("Missing investigation id in server response");
       }
+      retry.clear();
       router.push(`/dashboard/gap-investigations/${investigationId}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong");

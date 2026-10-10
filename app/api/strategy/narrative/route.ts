@@ -3,6 +3,12 @@ import OpenAI from "openai";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 import { createHash } from "crypto";
+import { RATE_LIMITS } from "@/lib/rate-limit/types";
+import { tryConsume, markCompleted, markFailed, refund } from "@/lib/rate-limit/rpc";
+import {
+  classifyOpenAIError,
+  isTransient,
+} from "@/lib/rate-limit/openai-errors";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -159,7 +165,30 @@ export async function GET() {
       });
     }
 
-    const response = await openai.responses.create({
+    // Cache miss → reserve a narrative_uncached slot before invoking OpenAI.
+    const reservation = await tryConsume({
+      userId: user.id,
+      bucket: "narrative_uncached",
+      limit: RATE_LIMITS.narrative_uncached,
+    });
+    if (reservation.outcome === "rate_limited") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "rate_limit_exceeded",
+          message: `You've reached the hourly limit for narrative generations. Try again in about ${Math.max(1, Math.ceil(reservation.retry_after_seconds / 60))} minute(s).`,
+          bucket: "narrative_uncached",
+          limit: reservation.quota_limit,
+          used: reservation.used,
+          retry_after_seconds: reservation.retry_after_seconds,
+        },
+        { status: 429, headers: { "Retry-After": String(reservation.retry_after_seconds) } }
+      );
+    }
+
+    let response;
+    try {
+      response = await openai.responses.create({
       model: "gpt-4.1",
       input: [
         {
@@ -245,12 +274,22 @@ Field rules:
         },
       },
     });
+    } catch (openaiErr) {
+      const cls = classifyOpenAIError(openaiErr);
+      if (isTransient(cls)) {
+        await refund({ userId: user.id, eventId: reservation.event_id });
+      } else {
+        await markFailed({ userId: user.id, eventId: reservation.event_id });
+      }
+      throw openaiErr;
+    }
 
     let parsed: any;
     try {
       parsed = JSON.parse(response.output_text);
     } catch (parseErr) {
       console.error("STRATEGY NARRATIVE PARSE ERROR:", parseErr);
+      await markFailed({ userId: user.id, eventId: reservation.event_id });
       return NextResponse.json({ success: true, data: EMPTY_STRATEGY_NARRATIVE });
     }
 
@@ -270,19 +309,29 @@ Field rules:
       console.error("STRATEGY NARRATIVE CACHE INSERT ERROR:", insertErr);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        target_positioning: parsed.target_positioning,
-        strategic_direction: parsed.strategic_direction,
-        where_to_focus: parsed.where_to_focus,
-        where_to_avoid: parsed.where_to_avoid,
-        positioning_tradeoffs: parsed.positioning_tradeoffs,
-        narrative_to_tell: parsed.narrative_to_tell,
-        risks: parsed.risks,
+    await markCompleted({ userId: user.id, eventId: reservation.event_id });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          target_positioning: parsed.target_positioning,
+          strategic_direction: parsed.strategic_direction,
+          where_to_focus: parsed.where_to_focus,
+          where_to_avoid: parsed.where_to_avoid,
+          positioning_tradeoffs: parsed.positioning_tradeoffs,
+          narrative_to_tell: parsed.narrative_to_tell,
+          risks: parsed.risks,
+        },
+        cached: false,
       },
-      cached: false,
-    });
+      {
+        headers: {
+          "X-RateLimit-Limit": String(reservation.quota_limit),
+          "X-RateLimit-Remaining": String(Math.max(0, reservation.quota_limit - reservation.used)),
+        },
+      }
+    );
   } catch (err) {
     console.error("STRATEGY NARRATIVE ERROR:", err);
     return NextResponse.json({ success: false, error: "Failed to generate strategy narrative" }, { status: 500 });

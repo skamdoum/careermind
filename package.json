@@ -9,7 +9,10 @@
     "lint": "eslint",
     "eval": "tsx scripts/eval/run.ts",
     "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
-    "eval:rescore": "tsx scripts/eval/rescore.ts"
+    "eval:test:rl": "node --import tsx --test scripts/eval/tests/rate-limit.test.ts",
+    "eval:rescore": "tsx scripts/eval/rescore.ts",
+    "test:operations": "node --import tsx --test scripts/tests/routes.test.ts",
+    "test:operations:db": "node --import tsx scripts/tests/operations-db.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

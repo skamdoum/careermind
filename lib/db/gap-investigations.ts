@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // Shared type surface for the Gap Investigation Agent.
@@ -176,15 +177,17 @@ export type InvestigationBundle = {
 // ---------------------------------------------------------------------
 // Convenience helpers. All writes use the admin client because the
 // investigation flow runs inside API routes that have already authorized
-// the user upstream and know the user_id to scope to. RLS on the tables
-// is still the second line of defense against a leaked admin call.
+// the user upstream and know the user_id to scope to. The service-role client bypasses RLS; explicit ownership predicates
+// are mandatory. API operation routes pass their user-scoped client instead.
 // ---------------------------------------------------------------------
 
 export async function loadInvestigationBundle(
   investigationId: string,
-  userId: string
+  userId: string,
+  userClient?: SupabaseClient
 ): Promise<InvestigationBundle | null> {
-  const { data: investigation, error: invErr } = await supabaseAdmin
+  const client = userClient ?? supabaseAdmin;
+  const { data: investigation, error: invErr } = await client
     .from("gap_investigations")
     .select("*")
     .eq("id", investigationId)
@@ -197,13 +200,13 @@ export async function loadInvestigationBundle(
   if (!investigation) return null;
 
   const [turnsRes, evidenceRes] = await Promise.all([
-    supabaseAdmin
+    client
       .from("gap_investigation_turns")
       .select("*")
       .eq("investigation_id", investigationId)
       .eq("user_id", userId)
       .order("turn_index", { ascending: true }),
-    supabaseAdmin
+    client
       .from("gap_investigation_evidence")
       .select("*")
       .eq("investigation_id", investigationId)

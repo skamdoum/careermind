@@ -1,5 +1,6 @@
 "use client";
 
+import { retryKey } from "@/lib/ai-operations/client";
 import { useState, useRef, useEffect } from "react";
 import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
@@ -53,7 +54,10 @@ const SOURCE_LABEL = {
 
 export default function InvestigationClient({ initialBundle }: Props) {
   const [bundle, setBundle] = useState<InvestigationBundle>(initialBundle);
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState(() => {
+    const last = initialBundle.turns.at(-1);
+    return last?.role === "user" ? last.content : "";
+  });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -72,18 +76,22 @@ export default function InvestigationClient({ initialBundle }: Props) {
     setSending(true);
     setError(null);
     try {
+      const questionId = [...turns].reverse().find((turn) => turn.role === "assistant")?.id ?? null;
+      const payload = { content: trimmed, question_id: questionId };
+      const retry = await retryKey(`gap_turn:${investigation.id}`, payload);
       const res = await fetch(
         `/api/gap-investigations/${investigation.id}/turns`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: trimmed }),
+          headers: { "Content-Type": "application/json", "Idempotency-Key": retry.key },
+          body: JSON.stringify(payload),
         }
       );
       const json = await res.json();
       if (!res.ok || !json?.success) {
-        throw new Error(json?.error || "Failed to send your answer");
+        throw new Error(json?.message || json?.error || "Failed to send your answer");
       }
+      retry.clear();
       setBundle(json.data as InvestigationBundle);
       setContent("");
     } catch (e: unknown) {

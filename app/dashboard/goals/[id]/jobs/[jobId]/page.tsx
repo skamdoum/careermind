@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { retryKey } from "@/lib/ai-operations/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import PageHeader from "@/app/components/ui/PageHeader";
@@ -103,14 +104,11 @@ export default function TargetJobDetailPage({ params }: PageProps) {
         // Non-fatal — fall through with whatever id we already have.
       }
 
+      const payload = { career_goal_id: goalId, job_description_id: jobId, resume_id: resumeIdToSend };
+      const retry = await retryKey("analyze", payload);
       const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          career_goal_id: goalId,
-          job_description_id: jobId,
-          resume_id: resumeIdToSend,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": retry.key },
+        body: JSON.stringify(payload),
       });
 
       if (res.status === 401) {
@@ -126,7 +124,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
             "You've reached the free analysis limit. Upgrade to continue."
           );
         } else {
-          setAnalyzeError(json?.error || "Failed to run analysis.");
+          setAnalyzeError(json?.message || json?.error || "Failed to run analysis.");
         }
         setAnalyzing(false);
         return;
@@ -138,6 +136,7 @@ export default function TargetJobDetailPage({ params }: PageProps) {
         setAnalyzing(false);
         return;
       }
+      retry.clear();
 
       window.location.assign(`/dashboard/${analysisId}`);
     } catch (e: unknown) {

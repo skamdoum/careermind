@@ -1,0 +1,89 @@
+{
+  "id": "GI-02-genuine-capability-gap",
+  "title": "Genuine capability gap — Program Manager with no personal product-decision ownership",
+  "category": "capability_gap_genuine",
+  "resume": { "file": "GI-02-program-manager.txt" },
+  "target": { "role": "Senior Product Manager, Consumer Product", "level": "Senior" },
+  "assessment": {
+    "general_capability": "Product management ownership — personally owning product strategy, roadmap, and final feature/launch calls.",
+    "target_specific_requirement": "Senior PM Consumer Product — personal ownership of product strategy and final product calls for consumer features at Senior scope."
+  },
+  "seed_gap": {
+    "gap_code": "product_strategy",
+    "gap_title": "No evidence of personal product management ownership",
+    "gap_description": "Resume shows strong program management execution but no personal ownership of product decisions, strategy, or prioritization. Target role requires owning product strategy and making final product calls.",
+    "recommended_fix": "Establish whether the candidate has owned any product decisions directly.",
+    "severity": "high"
+  },
+  "seed_analysis": {
+    "positioning_summary": "Strong Technical Program Manager profile. For a Senior PM target, the central question is whether the candidate has personally owned product decisions beyond coordinating others' decisions.",
+    "related_signals": [
+      { "signal_name": "product_ownership", "score": 1, "rationale": "No product-decision ownership surfaced." },
+      { "signal_name": "execution", "score": 5, "rationale": "Strong track record of release and dependency management." }
+    ]
+  },
+  "user_simulation": {
+    "persona": {
+      "style": "direct_concrete",
+      "fallback_answer": "That falls outside my ownership — the PMs on the team owned product decisions. I owned execution."
+    },
+    "answer_rules": [
+      {
+        "id": "ownership_denial",
+        "match": {
+          "dimensions": ["ownership"],
+          "patterns": ["own", "decide", "decision", "strategy", "prioritiz", "call"]
+        },
+        "answer": "Honestly, I don't own product decisions. The PMs on the teams I supported owned the roadmap, prioritization, and strategic calls. I own schedules, dependencies, and risks."
+      },
+      {
+        "id": "specific_product_decision",
+        "match": {
+          "patterns": ["specific", "example", "any product", "tell me about a product", "which decision"]
+        },
+        "answer": "I don't have an example of personally making a product decision. The closest thing would be when I pushed back on a timeline because a dependency was slipping, but the scope and feature calls were the PM's."
+      },
+      {
+        "id": "scope_execution",
+        "match": {
+          "dimensions": ["scope"],
+          "patterns": ["scope", "scale", "team", "size", "how many"]
+        },
+        "answer": "I coordinate a 40-person platform organization across 6 engineering teams. 12 major releases over the last two years at a 95% on-time rate."
+      },
+      {
+        "id": "outcome_delivery",
+        "match": {
+          "dimensions": ["outcome"],
+          "patterns": ["outcome", "impact", "result", "metric", "number"]
+        },
+        "answer": "95% on-time release rate, a 40% drop in cross-team dependency slips, and 2x faster quarterly planning cycles. Those are execution outcomes though — not product outcomes."
+      },
+      {
+        "id": "target_role_fit_denial",
+        "match": {
+          "dimensions": ["target_role_fit"],
+          "patterns": ["target role", "senior pm", "product manager", "fit", "this role"]
+        },
+        "answer": "I'll be straightforward — I haven't done the product-ownership work this role requires. I've been adjacent to it as a TPM, but I haven't owned a product's strategy, roadmap, or launch calls myself."
+      }
+    ]
+  },
+  "expected": {
+    "underlying_capability": "not_demonstrated",
+    "resume_evidence": "does_not_demonstrate",
+    "target_role_fit": "does_not_meet",
+    "classification": "capability_gap",
+    "residual_gap_must_mention": ["product"],
+    "hypothesis_status_expected": "confirmed",
+    "max_turns_recommended": 3,
+    "hard_max_turns": 5,
+    "expect_kickoff_hypothesis_challenge": false,
+    "forbidden_claims": [
+      "owned product strategy",
+      "made product decisions",
+      "senior pm with strong product ownership",
+      "owns roadmap"
+    ]
+  }
+}

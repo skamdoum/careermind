@@ -1,0 +1,99 @@
+{
+  "id": "GI-03-scope-mismatch-platform-api",
+  "title": "Scope mismatch — strong non-platform PM; target role requires platform/API strategy ownership",
+  "category": "scope_mismatch_platform_api",
+  "resume": { "file": "GI-03-service-health-pm.txt" },
+  "target": { "role": "Platform Product Manager, Developer APIs", "level": "Senior" },
+  "assessment": {
+    "general_capability": "Product management ownership — personally owning product strategy and roadmap for a product at meaningful scope with quantified outcomes.",
+    "target_specific_requirement": "Platform PM Developer APIs (Senior) — personal ownership of platform/API strategy, developer-integration decisions, and ecosystem/interface direction. Owning an API as the delivery mechanism for a customer-facing capability is NOT the same as owning platform/API strategy."
+  },
+  "seed_gap": {
+    "gap_code": "ai_product_depth",
+    "gap_title": "No evidence of platform/API strategy ownership",
+    "gap_description": "Resume shows PM ownership of a reliability product but does not surface personal ownership of platform/API strategy, developer-integration decisions, or ecosystem direction. Target role requires owning platform/API strategy at scale.",
+    "recommended_fix": "Establish whether the candidate has personally owned platform/API strategy decisions.",
+    "severity": "high"
+  },
+  "seed_analysis": {
+    "positioning_summary": "Senior PM for an internal reliability product with meaningful organizational scope. For a Platform PM target, the question is whether the candidate's API work extended to owning platform/API strategy or whether the API was simply a delivery mechanism for a customer-facing capability.",
+    "related_signals": [
+      { "signal_name": "product_strategy", "score": 4, "rationale": "Clear ownership of product strategy for Service Health." },
+      { "signal_name": "platform_thinking", "score": 2, "rationale": "API capability shipped but platform/API strategy ownership not surfaced." }
+    ]
+  },
+  "user_simulation": {
+    "persona": {
+      "style": "direct_concrete",
+      "fallback_answer": "Happy to be more specific — which part would you like me to dig into?"
+    },
+    "answer_rules": [
+      {
+        "id": "ownership_product_strategy",
+        "match": {
+          "dimensions": ["ownership"],
+          "patterns": ["own", "strategy", "roadmap", "prioritiz"]
+        },
+        "answer": "I own product strategy and roadmap end-to-end for Lumen Service Health. The service is used by 132 internal service teams and surfaces live status to 1M+ enterprise customers. I make the prioritization and tradeoff calls."
+      },
+      {
+        "id": "api_capability_delivery",
+        "match": {
+          "patterns": ["api", "capability", "feature", "led a", "new product"]
+        },
+        "answer": "I personally led a new API capability that lets enterprise customers plan around Lumen maintenance. It reduced support cases 17% in the first three months. I prioritized which service teams to onboard next; six more teams onboarded and support cases dropped a further 23%."
+      },
+      {
+        "id": "complexity_tradeoffs",
+        "match": {
+          "dimensions": ["complexity"],
+          "patterns": ["complex", "tradeoff", "ambigu", "difficult", "hard"]
+        },
+        "answer": "The hard part was prioritizing across 132 internal service teams with competing asks. I used customer-impact and support-case cost-of-delay as the ranking function and defended it in monthly business reviews with leadership."
+      },
+      {
+        "id": "outcome_quantified",
+        "match": {
+          "dimensions": ["outcome"],
+          "patterns": ["outcome", "impact", "metric", "result", "quantif"]
+        },
+        "answer": "17% support-case reduction in three months on the first wave. Six more service teams onboarded in the following quarter and support cases dropped a further 23%. I tracked and presented the metric monthly."
+      },
+      {
+        "id": "platform_api_strategy_denied",
+        "match": {
+          "dimensions": ["target_role_fit"],
+          "patterns": [
+            "platform",
+            "api strategy",
+            "developer",
+            "integration",
+            "ecosystem",
+            "interface",
+            "investment priorit",
+            "api direction",
+            "platform/api"
+          ]
+        },
+        "answer": "To be direct: no. I did not personally own platform or API strategy decisions. The API was the delivery mechanism for a customer-facing reliability capability I owned, not a platform play I set direction for. Developer-integration direction, ecosystem decisions, and platform investment priorities sat with the Lumen Platform team, not me."
+      }
+    ]
+  },
+  "expected": {
+    "underlying_capability": "demonstrated",
+    "resume_evidence": "demonstrates",
+    "target_role_fit": "does_not_meet",
+    "classification": "scope_mismatch",
+    "residual_gap_must_mention": ["platform", "api"],
+    "hypothesis_status_expected": "partially_disproven",
+    "max_turns_recommended": 4,
+    "hard_max_turns": 6,
+    "expect_kickoff_hypothesis_challenge": false,
+    "forbidden_claims": [
+      "owned platform strategy",
+      "owned api strategy",
+      "owned developer integration",
+      "owned ecosystem strategy"
+    ]
+  }
+}

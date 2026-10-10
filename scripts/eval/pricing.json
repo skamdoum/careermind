@@ -1,0 +1,7 @@
+{
+  "_note": "USD per 1M tokens. GPT-4.1 and GPT-4.1-mini values match OpenAI's published rates (verified 2026-10-06). o4-mini rates are approximate — verify at openai.com/pricing before trusting cost figures. Reasoning tokens are billed at output rates and are included in the `output_tokens` field in the Responses API.",
+  "_verified_at": "2026-10-06",
+  "gpt-4.1": { "input_per_1m_usd": 2.0, "output_per_1m_usd": 8.0 },
+  "gpt-4.1-mini": { "input_per_1m_usd": 0.4, "output_per_1m_usd": 1.6 },
+  "o4-mini": { "input_per_1m_usd": 1.1, "output_per_1m_usd": 4.4 }
+}

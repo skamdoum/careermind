@@ -1,0 +1,114 @@
+{
+  "id": "GI-05-participation-vs-ownership",
+  "title": "Participation vs ownership — vague initial answer; agent should probe for the ownership specifics",
+  "category": "participation_vs_ownership",
+  "resume": { "file": "GI-05-roadmap-collaborator.txt" },
+  "target": { "role": "Senior Product Manager, Payments", "level": "Senior" },
+  "assessment": {
+    "general_capability": "Product management ownership — personally exercising final-call authority on product scope, feature launches, and strategic bets. Shaping planning rituals or facilitating research is operations capability, not PM capability.",
+    "target_specific_requirement": "Senior PM Payments — personal ownership of payment product strategy and launch decisions."
+  },
+  "seed_gap": {
+    "gap_code": "product_strategy",
+    "gap_title": "Collaboration on roadmap may not establish ownership",
+    "gap_description": "Resume uses collaboration language ('worked closely with the product team on roadmap', 'shaped prioritization') without surfacing who owned the final call. Target role requires personal ownership of product strategy decisions.",
+    "recommended_fix": "Probe participation vs ownership. Who owned the final product calls?",
+    "severity": "high"
+  },
+  "seed_analysis": {
+    "positioning_summary": "Product Operations Lead with meaningful partnership to PMs but ownership language is ambiguous. Needs direct probing to distinguish shaping decisions from owning them.",
+    "related_signals": [
+      { "signal_name": "product_ownership", "score": 2, "rationale": "Collaboration verbs throughout; final-call ownership not surfaced." },
+      { "signal_name": "cross_functional_leadership", "score": 4, "rationale": "Clear partnership with Product and Engineering." }
+    ]
+  },
+  "user_simulation": {
+    "persona": {
+      "style": "vague_initial_specific_on_followup",
+      "fallback_answer": "I'd say I was close to those decisions — but let me know what specifically you want me to clarify."
+    },
+    "answer_rules": [
+      {
+        "id": "ownership_probe_final_call",
+        "match": {
+          "patterns": [
+            "who owned",
+            "final call",
+            "who made the call",
+            "personally decide",
+            "your specific decision",
+            "specific decision you",
+            "did you own",
+            "did you personally"
+          ]
+        },
+        "answer": "The product manager owned the final call. I ran the design workshops, the research sessions, and the prioritization frameworks that informed those calls. My personal decisions were about workshop format, which customers to interview, and which research questions to prioritize — not product scope, feature launches, or strategic bets."
+      },
+      {
+        "id": "deeper_probe_personal_decision",
+        "match": {
+          "patterns": [
+            "any product decision you",
+            "any product call",
+            "example of a product",
+            "specific product",
+            "something you decided",
+            "what specifically did you decide",
+            "which product"
+          ]
+        },
+        "answer": "Honestly, no — I don't have a product decision I'd call my own. I shaped a lot of inputs: planning cadence, OKR frameworks, prioritization templates, launch review formats. Those are operating decisions, not product decisions."
+      },
+      {
+        "id": "vague_initial_roadmap",
+        "match": {
+          "dimensions": ["ownership"],
+          "patterns": ["roadmap", "strategy", "prioritiz", "decision"],
+          "not_patterns": [
+            "who owned",
+            "final call",
+            "who made the call",
+            "personally decide",
+            "did you own",
+            "did you personally"
+          ]
+        },
+        "answer": "I worked closely with the product team on roadmap and prioritization decisions. I shaped the planning rituals, brought research into the conversation, and helped the PMs align on quarterly bets."
+      },
+      {
+        "id": "scope_ops",
+        "match": {
+          "dimensions": ["scope"],
+          "patterns": ["scope", "scale", "team", "how many"]
+        },
+        "answer": "I partnered with 4 PMs across checkout and risk at Harbor Payments. I shaped the operating cadence for the full Product org — roadmap reviews, OKR tracking, retros."
+      },
+      {
+        "id": "outcome_ops",
+        "match": {
+          "dimensions": ["outcome"],
+          "patterns": ["outcome", "impact", "metric", "result"]
+        },
+        "answer": "I cut quarterly-planning cycle time in half and lifted OKR completion rate from 40% to 72% in a year. Those are operations outcomes though — product outcomes rolled up to the PMs."
+      }
+    ]
+  },
+  "expected": {
+    "underlying_capability": "not_demonstrated",
+    "resume_evidence": "does_not_demonstrate",
+    "target_role_fit": "does_not_meet",
+    "classification": "capability_gap",
+    "residual_gap_must_mention": ["product", "own"],
+    "hypothesis_status_expected": "confirmed",
+    "max_turns_recommended": 4,
+    "hard_max_turns": 6,
+    "expect_kickoff_hypothesis_challenge": false,
+    "expect_participation_vs_ownership_probe": true,
+    "forbidden_claims": [
+      "owned product strategy",
+      "owned the roadmap",
+      "made the final product call",
+      "senior pm"
+    ]
+  }
+}

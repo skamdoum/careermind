@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval": "tsx scripts/eval/run.ts",
+    "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
+    "eval:rescore": "tsx scripts/eval/rescore.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
@@ -27,6 +30,7 @@
     "eslint-config-next": "16.2.1",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

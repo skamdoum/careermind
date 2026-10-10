@@ -1,0 +1,32 @@
+MORGAN HARRELL
+Senior Product Manager
+morgan.harrell.synth@example.com | Redmond, WA
+
+SUMMARY
+Senior Product Manager focused on cloud reliability and service-health
+tooling. Owns product strategy for an internal reliability product used
+across a large cloud organization.
+
+EXPERIENCE
+
+Lumen Cloud  —  Senior Product Manager, Service Health
+2021 – Present
+- Senior PM for Lumen Service Health, a reliability product used by
+  132 internal service teams and surfacing live status to enterprise
+  customers of Lumen Cloud.
+- Lead product strategy, roadmap, and prioritization for the service.
+- Led a new API capability that lets enterprise customers plan around
+  Lumen maintenance; delivered a measurable reduction in support cases.
+- Partner with internal service teams and enterprise customers to drive
+  adoption of the capability.
+
+Lumen Cloud  —  Product Manager, Reliability Tooling
+2018 – 2021
+- PM for an internal reliability dashboard used by on-call teams.
+- Shipped alerting improvements and runbook integrations.
+
+Prior
+- Software engineering roles on reliability and infrastructure teams.
+
+EDUCATION
+B.S. Computer Science, Northern Tech, 2015.

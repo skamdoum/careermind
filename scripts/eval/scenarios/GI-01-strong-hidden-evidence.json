@@ -1,0 +1,134 @@
+{
+  "id": "GI-01-strong-hidden-evidence",
+  "title": "Strong hidden evidence — resume thin, user establishes direct ownership + measurable impact",
+  "category": "evidence_gap_strong_hidden",
+  "resume": { "file": "GI-01-growth-analytics-thin.txt" },
+  "target": { "role": "Senior Product Manager, Growth Analytics", "level": "Senior" },
+  "assessment": {
+    "general_capability": "Product management ownership for growth-analytics tooling — ability to personally own product strategy, prioritization, and deliver quantified business outcomes.",
+    "target_specific_requirement": "Senior PM Growth Analytics — personal ownership of growth-analytics product decisions with demonstrable measurable business impact."
+  },
+  "seed_gap": {
+    "gap_code": "quantified_impact",
+    "gap_title": "Thin evidence of quantified impact and direct product ownership",
+    "gap_description": "Resume uses soft verbs ('drove improvements', 'supported adoption', 'collaborated with') without concrete ownership of product strategy, measurable outcomes, or scope. The target role requires demonstrable ownership of growth analytics product decisions with measurable business impact.",
+    "recommended_fix": "Surface specific ownership, scope, and quantified outcomes if they exist.",
+    "severity": "high"
+  },
+  "seed_analysis": {
+    "positioning_summary": "The resume reads as a Senior PM in growth analytics but ownership and outcomes are not surfaced quantitatively. For a target Senior Growth Analytics PM role requiring measurable impact, the candidate's demonstrated scope is unclear.",
+    "related_signals": [
+      { "signal_name": "quantified_impact", "score": 2, "rationale": "No concrete numbers; soft outcome verbs throughout." },
+      { "signal_name": "product_ownership", "score": 3, "rationale": "Title says Senior PM but ownership specifics are missing." }
+    ]
+  },
+  "user_simulation": {
+    "persona": {
+      "style": "direct_concrete",
+      "fallback_answer": "I'd rather stay focused on the growth analytics work. What specifically would you like to understand?"
+    },
+    "answer_rules": [
+      {
+        "id": "ownership_strategy",
+        "match": {
+          "dimensions": ["ownership"],
+          "patterns": ["own", "strategy", "roadmap", "prioritiz", "decide", "decision"]
+        },
+        "answer": "I own the growth analytics product strategy end to end — I define the roadmap, make the prioritization calls, and set the quarterly bets. The last three quarters I decided to invest in experimentation reporting over funnel visualization because experiment velocity was the bottleneck for growth teams."
+      },
+      {
+        "id": "scope_scale",
+        "match": {
+          "dimensions": ["scope"],
+          "patterns": ["scope", "scale", "users", "team", "how many", "customers", "size"]
+        },
+        "answer": "The product serves ~2M monthly actives across growth, product, and marketing teams at Nova. I lead a 12-person pod — 8 engineers, 2 designers, 2 analysts — reporting into me functionally."
+      },
+      {
+        "id": "outcome_quantified",
+        "match": {
+          "dimensions": ["outcome"],
+          "patterns": ["outcome", "impact", "result", "metric", "quantif", "number"]
+        },
+        "answer": "The experimentation reporting investment lifted internal experiment velocity by 2.4x in six months. The downstream effect is measurable: adoption teams running experiments drove company-wide activation up 18% year over year, with one specific experiment on onboarding accounting for 8% of total growth."
+      },
+      {
+        "id": "complexity_tradeoffs",
+        "match": {
+          "dimensions": ["complexity"],
+          "patterns": ["tradeoff", "complex", "hard", "difficult", "ambigu", "constrain"]
+        },
+        "answer": "The hardest tradeoff was infrastructure cost versus analyst flexibility. Letting analysts write arbitrary queries blew up our warehouse spend. I made the call to invest in a semantic layer and pre-aggregated metric stores, which cut compute 60% while keeping analyst self-serve intact."
+      },
+      {
+        "id": "target_role_fit_direct",
+        "match": {
+          "dimensions": ["target_role_fit"],
+          "patterns": ["growth analytics", "target role", "this role", "position", "fit"]
+        },
+        "answer": "This is directly growth analytics product management. I own the strategy, the roadmap, and the measurable business outcomes for the product. The scope maps exactly to the target role you described."
+      }
+    ]
+  },
+  "expected": {
+    "underlying_capability": "demonstrated",
+    "resume_evidence": "partial",
+    "target_role_fit": "meets",
+    "classification": "evidence_gap",
+    "residual_gap_must_mention": [
+      "resume",
+      [
+        "lacks",
+        "lacking",
+        "surfac",
+        "not explicit",
+        "not quantif",
+        "no quantif",
+        "not reflect",
+        "missing",
+        "omit",
+        "under-represent",
+        "insufficient",
+        "fails to",
+        "not shown",
+        "not demonstrat",
+        "not captur",
+        "representation",
+        "does not provide",
+        "does not state",
+        "does not include",
+        "does not mention",
+        "does not show",
+        "does not list",
+        "does not surface",
+        "does not reflect",
+        "does not itself state",
+        "does not itself provide",
+        "do not provide",
+        "do not state",
+        "do not include",
+        "no measurable",
+        "no explicit",
+        "no direct",
+        "without quantif",
+        "without explicit",
+        "no outcomes stated",
+        "only through user",
+        "only via user",
+        "established via",
+        "established through user",
+        "established only through"
+      ]
+    ],
+    "hypothesis_status_expected": "disproven",
+    "max_turns_recommended": 4,
+    "hard_max_turns": 6,
+    "expect_kickoff_hypothesis_challenge": false,
+    "forbidden_claims": [
+      "owned platform strategy",
+      "principal",
+      "led the growth organization",
+      "VP of"
+    ]
+  }
+}

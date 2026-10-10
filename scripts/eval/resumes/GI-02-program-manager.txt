@@ -1,0 +1,34 @@
+RILEY NAKAMURA
+Senior Technical Program Manager
+riley.nakamura.synth@example.com | Seattle, WA
+
+SUMMARY
+Senior Technical Program Manager with 7 years of experience coordinating
+cross-functional software delivery. Expertise in release management,
+dependency tracking, and schedule-risk mitigation.
+
+EXPERIENCE
+
+Helio Software  —  Senior Technical Program Manager
+2021 – Present
+- Lead program management for a 40-person platform organization.
+- Run quarterly planning across 6 engineering teams.
+- Track dependencies, risks, and release schedules.
+- Partner with Product Managers who own feature decisions and
+  prioritization; translate those decisions into execution plans.
+- 95% on-time release rate across 12 major releases over two years.
+
+Helio Software  —  Technical Program Manager
+2019 – 2021
+- Coordinated releases of the internal data platform.
+- Owned release timelines and sprint cadence for 3 engineering teams.
+- Worked with the PM team on scope-vs-timeline tradeoffs.
+
+Vector Software  —  Program Manager
+2017 – 2019
+- Coordinated releases of mobile applications.
+- Owned risk logs, dependency maps, and sprint reports.
+
+EDUCATION
+B.S. Industrial Engineering, Pacific Tech, 2017.
+PMP certification, 2019.

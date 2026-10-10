@@ -49,3 +49,10 @@ careermind-web/.next/
 careermind-web/.env.local
 careermind-web/.envdesign-work/
 design-work/
+
+# macOS metadata
+.DS_Store
+
+# Gap-investigation eval harness
+scripts/eval/.openai-file-ids.json
+scripts/eval/reports/

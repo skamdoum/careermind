@@ -102,6 +102,29 @@ export type AgentTurnInput = {
   // into the context so the model carries forward its last conclusion
   // and uncertainty judgment rather than re-deriving them cold.
   prior_decision_state: DecisionState | null;
+  // Optional model override — set by the eval harness so the same agent
+  // function benchmarks across models. Production never sets this and
+  // continues to use AGENT_MODEL_NAME.
+  model_override?: string;
+  // Optional reasoning-effort setting for OpenAI reasoning models
+  // (o-series). Ignored when the model is not a reasoning model.
+  // Production never sets this.
+  reasoning_effort?: "low" | "medium" | "high";
+};
+
+// Token usage + the model actually used. Reported by runAgentTurnFull
+// so the eval harness can compute per-turn cost without introducing a
+// parallel OpenAI invocation.
+export type AgentTurnUsage = {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+};
+
+export type AgentTurnFullResult = {
+  output: AgentTurnOutput;
+  usage: AgentTurnUsage;
+  model: string;
 };
 
 const SYSTEM_PROMPT = `You are the CareerMind Gap Investigator, a focused agent that helps determine where a candidate actually stands relative to a career gap CareerMind previously flagged.
@@ -674,11 +697,23 @@ function buildUserInputText(input: AgentTurnInput): string {
 
 // -----------------------------------------------------------------
 // Public API: run one agent iteration.
+//
+// Production callers use `runAgentTurn` and get an AgentTurnOutput, as
+// before. The eval harness uses `runAgentTurnFull` to also receive the
+// token usage and the model actually invoked. Both share the same
+// internal call so there is no second code path.
 // -----------------------------------------------------------------
 
 export async function runAgentTurn(
   input: AgentTurnInput
 ): Promise<AgentTurnOutput> {
+  const { output } = await runAgentTurnFull(input);
+  return output;
+}
+
+export async function runAgentTurnFull(
+  input: AgentTurnInput
+): Promise<AgentTurnFullResult> {
   const userContent: Array<
     | { type: "input_file"; file_id: string }
     | { type: "input_text"; text: string }
@@ -696,8 +731,21 @@ export async function runAgentTurn(
     text: buildUserInputText(input),
   });
 
+  const model = input.model_override ?? AGENT_MODEL_NAME;
+
+  // Reasoning models (o-series) accept a `reasoning` parameter.
+  // Non-reasoning models reject it. Heuristic: model id starts with "o"
+  // followed by a digit (o1, o3, o3-mini, o4-mini, …). Production
+  // (gpt-4.1) does not match, so this stays off by default.
+  const isReasoningModel = /^o\d/.test(model);
+  const reasoning =
+    isReasoningModel && input.reasoning_effort
+      ? { effort: input.reasoning_effort }
+      : undefined;
+
   const response = await openai.responses.create({
-    model: AGENT_MODEL_NAME,
+    model,
+    ...(reasoning ? { reasoning } : {}),
     input: [
       {
         role: "system",
@@ -719,8 +767,17 @@ export async function runAgentTurn(
   });
 
   const raw = response.output_text;
-  const parsed = JSON.parse(raw) as AgentTurnOutput;
-  return parsed;
+  const output = JSON.parse(raw) as AgentTurnOutput;
+
+  const u = (response as { usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } }).usage;
+  const usage: AgentTurnUsage = {
+    input_tokens: u?.input_tokens ?? 0,
+    output_tokens: u?.output_tokens ?? 0,
+    total_tokens:
+      u?.total_tokens ?? (u?.input_tokens ?? 0) + (u?.output_tokens ?? 0),
+  };
+
+  return { output, usage, model };
 }
 
 // -----------------------------------------------------------------

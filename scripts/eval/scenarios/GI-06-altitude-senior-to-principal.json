@@ -1,0 +1,137 @@
+{
+  "id": "GI-06-altitude-senior-to-principal",
+  "title": "Altitude scope mismatch — strong Senior PM; target is Principal",
+  "category": "scope_mismatch_altitude",
+  "resume": { "file": "GI-06-senior-pm.txt" },
+  "target": { "role": "Principal Product Manager, Developer Platform", "level": "Principal" },
+  "assessment": {
+    "general_capability": "Product management ownership — personally owning product strategy, roadmap, and prioritization for a product at material scope with measurable outcomes. Assessed independently of target seniority.",
+    "target_specific_requirement": "Principal PM Developer Platform — multi-year cross-organizational product strategy, portfolio-level scope, and executive influence over strategic bets beyond a single product."
+  },
+  "seed_gap": {
+    "gap_code": "strategic_scope",
+    "gap_title": "Principal-level strategic altitude not established",
+    "gap_description": "Resume shows strong Senior PM execution owning strategy and roadmap for a single developer-tools product. Target Principal role requires multi-year cross-org strategy, portfolio-level scope, and executive influence across adjacent teams.",
+    "recommended_fix": "Probe for multi-year strategic direction, cross-organizational scope, and executive influence over strategic bets.",
+    "severity": "high"
+  },
+  "seed_analysis": {
+    "positioning_summary": "Clear Senior-level product strategy ownership for Rowan Studio. For a Principal target the question is whether the candidate's strategic scope extended beyond their single product and shaped broader portfolio or organizational direction.",
+    "related_signals": [
+      { "signal_name": "product_strategy", "score": 4, "rationale": "Owns strategy and roadmap for Rowan Studio with measurable outcomes." },
+      { "signal_name": "strategic_scope", "score": 3, "rationale": "Scope is a single product; multi-year cross-org strategy not surfaced." }
+    ]
+  },
+  "user_simulation": {
+    "persona": {
+      "style": "direct_concrete",
+      "fallback_answer": "I can speak to Studio specifically — what dimension would you like me to go deeper on?"
+    },
+    "answer_rules": [
+      {
+        "id": "ownership_senior_strategy",
+        "match": {
+          "dimensions": ["ownership"],
+          "patterns": ["own", "strategy", "roadmap", "prioritiz"]
+        },
+        "answer": "I own product strategy, the 2-year roadmap, and quarterly prioritization for Rowan Studio. I decide what we build, what we don't, and how we sequence launches."
+      },
+      {
+        "id": "scope_single_product",
+        "match": {
+          "dimensions": ["scope"],
+          "patterns": ["scope", "scale", "team", "users", "size", "how many"]
+        },
+        "answer": "Rowan Studio has 85k+ developers across mid-market software teams. My pod is 10 engineers, 2 designers, 1 researcher. Scope is Studio specifically; other Rowan products have their own PMs."
+      },
+      {
+        "id": "outcome_senior_quantified",
+        "match": {
+          "dimensions": ["outcome"],
+          "patterns": ["outcome", "impact", "result", "metric", "quantif"]
+        },
+        "answer": "Weekly active developers tripled over three years and activation improved 28%. Five major launches, each with pre-registered success criteria I owned."
+      },
+      {
+        "id": "cross_org_denied",
+        "match": {
+          "patterns": [
+            "cross-org",
+            "cross organization",
+            "other products",
+            "adjacent",
+            "portfolio",
+            "beyond your product",
+            "beyond studio",
+            "broader",
+            "org-wide",
+            "organization-wide"
+          ]
+        },
+        "answer": "To be straightforward — I haven't shaped strategy beyond Rowan Studio. Adjacent PMs run their own roadmaps and I collaborate at launch coordination time, but I don't set direction for Rowan Build Agent or Rowan Insights. That cross-product portfolio call sits with our Director and VP."
+      },
+      {
+        "id": "multi_year_strategy_denied",
+        "match": {
+          "patterns": [
+            "multi-year",
+            "multi year",
+            "long-term strategic",
+            "3-year",
+            "five year",
+            "long horizon",
+            "strategic bet",
+            "strategic direction",
+            "principal",
+            "vision across",
+            "beyond 24"
+          ]
+        },
+        "answer": "I own a 2-year Studio roadmap but I'm not driving a multi-year portfolio bet or an org-wide product-platform direction. That's the Director's and VP's work. I feed into their thinking but I don't own it."
+      },
+      {
+        "id": "executive_influence_limited",
+        "match": {
+          "patterns": [
+            "executive",
+            "exec",
+            "vp",
+            "cto",
+            "cpo",
+            "leadership team",
+            "senior leadership",
+            "influence over strategic",
+            "board",
+            "c-suite"
+          ]
+        },
+        "answer": "I present Studio roadmap and performance to the VP of Product monthly. I don't influence strategic bets outside Studio or sit in exec staff decisions. I'm not driving org-wide investment calls."
+      },
+      {
+        "id": "target_role_fit_candid",
+        "match": {
+          "dimensions": ["target_role_fit"],
+          "patterns": ["target role", "principal", "this role", "fit", "altitude"]
+        },
+        "answer": "I'd be candid — I operate at a strong Senior level on Studio specifically. I haven't operated at Principal altitude across a portfolio or org-wide platform. That's a stretch for me today."
+      }
+    ]
+  },
+  "expected": {
+    "underlying_capability": "demonstrated",
+    "resume_evidence": "demonstrates",
+    "target_role_fit": "does_not_meet",
+    "classification": "scope_mismatch",
+    "residual_gap_must_mention": ["principal"],
+    "residual_gap_must_not_mention": ["no product strategy", "lacks product strategy"],
+    "hypothesis_status_expected": "partially_disproven",
+    "max_turns_recommended": 5,
+    "hard_max_turns": 7,
+    "expect_kickoff_hypothesis_challenge": false,
+    "forbidden_claims": [
+      "principal-level altitude demonstrated",
+      "owns multi-year cross-org strategy",
+      "sets direction across the portfolio"
+    ]
+  }
+}

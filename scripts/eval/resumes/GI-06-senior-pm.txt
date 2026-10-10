@@ -1,0 +1,35 @@
+AVERY LINDQVIST
+Senior Product Manager
+avery.lindqvist.synth@example.com | Boston, MA
+
+SUMMARY
+Senior Product Manager with 8 years of experience owning product strategy
+and execution for a single developer-tools product. Known for crisp
+discovery and strong cross-functional partnership with Engineering.
+
+EXPERIENCE
+
+Rowan Build Systems  —  Senior Product Manager
+2020 – Present
+- Own product strategy, roadmap, and prioritization for Rowan Studio,
+  a developer-tooling IDE extension used by 85k+ developers across
+  mid-market software teams.
+- Define the 12-24 month product vision and 2-year roadmap for Rowan
+  Studio specifically.
+- Lead cross-functional discovery, launch planning, and GTM alignment
+  for Studio launches.
+- Shipped 5 major Studio releases; grew weekly active users 3x and
+  improved activation by 28%.
+- Present roadmap and performance to the VP of Product monthly.
+
+Rowan Build Systems  —  Product Manager
+2017 – 2020
+- PM for the Studio onboarding experience.
+- Owned the first-session activation funnel.
+
+Prior
+- Associate PM at a developer-platform startup.
+
+EDUCATION
+M.S. Computer Science, Charles River University, 2016.
+B.S. Mathematics, Charles River University, 2014.

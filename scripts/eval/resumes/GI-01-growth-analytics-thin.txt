@@ -1,0 +1,32 @@
+JAMIE OKAFOR
+Senior Product Manager
+jamie.okafor.synth@example.com | San Francisco, CA
+
+SUMMARY
+Senior Product Manager focused on growth analytics tools. Partners with
+engineering and design to ship data products that help internal teams
+understand user behavior.
+
+EXPERIENCE
+
+Nova Analytics Platform  —  Senior Product Manager
+2022 – Present
+- Senior PM for growth analytics tools.
+- Drove analytics product improvements across funnel insights and
+  experimentation reporting.
+- Cross-functional team of engineers, designers, and analysts.
+- Supported adoption efforts with internal partner teams.
+
+Nova Analytics Platform  —  Product Manager
+2020 – 2022
+- Product Manager for self-serve dashboarding.
+- Shipped iterative improvements to the dashboarding editor.
+- Collaborated with Marketing and Sales on launch materials.
+
+Pico Insights  —  Associate Product Manager
+2018 – 2020
+- APM on the metrics ingestion pipeline.
+- Participated in release planning and roadmap reviews.
+
+EDUCATION
+B.S. Computer Science, State University, 2018.

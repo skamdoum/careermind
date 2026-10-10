@@ -127,3 +127,14 @@ Follow-up validation: 22 handler/client tests, 20 quota tests, 15 evaluation
 assertions and 41 PostgreSQL 16 checks passed; production build, separate
 TypeScript and scoped lint passed. Full-project legacy lint failures remain.
 These results replace the pre-fix counts above for the remediated working tree.
+
+## Independent review follow-up
+
+The latest PR review's requirements were investigated. Migration 2's intermediate
+browser grants were confirmed and removed; an explicit between-migrations ACL
+regression now passes. Expanded recovery tests found no additional defect:
+24 handler/client tests and 59 PostgreSQL 16 checks passed. Exact PG17/PostgREST,
+permissions/storage and authenticated browser staging gates remain. Details are
+in `pr-review-follow-up.md`. The follow-up push is held at the user's request
+until automatic preview deployments are disabled; do not equate local fixes with
+GitHub's current PR head until that push occurs.

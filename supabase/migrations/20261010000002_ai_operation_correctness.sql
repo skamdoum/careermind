@@ -1,5 +1,6 @@
 -- CareerMind beta: three concrete operations, no background workflow engine.
 -- Must follow the Phase 2a rate-limit migration. See scripts/tests/README.md.
+-- Transitional operation RPCs remain inaccessible to API roles until migration 3.
 begin;
 set local lock_timeout = '5s';
 
@@ -373,16 +374,10 @@ begin
   return answer;
 end $$;
 
-revoke all on function public.lookup_career_operation(text,text,text) from public,anon;
-revoke all on function public.claim_career_operation(text,text,text,jsonb,uuid,text,uuid) from public,anon;
-revoke all on function public.checkpoint_career_operation(uuid,uuid,jsonb) from public,anon;
-revoke all on function public.release_career_operation(uuid,uuid,boolean) from public,anon;
-revoke all on function public.finalize_career_analysis(uuid,uuid,jsonb) from public,anon;
-revoke all on function public.finalize_career_gap(uuid,uuid) from public,anon;
-grant execute on function public.lookup_career_operation(text,text,text) to authenticated;
-grant execute on function public.claim_career_operation(text,text,text,jsonb,uuid,text,uuid) to authenticated;
-grant execute on function public.checkpoint_career_operation(uuid,uuid,jsonb) to authenticated;
-grant execute on function public.release_career_operation(uuid,uuid,boolean) to authenticated;
-grant execute on function public.finalize_career_analysis(uuid,uuid,jsonb) to authenticated;
-grant execute on function public.finalize_career_gap(uuid,uuid) to authenticated;
+revoke all on function public.lookup_career_operation(text,text,text) from public,anon,authenticated,service_role;
+revoke all on function public.claim_career_operation(text,text,text,jsonb,uuid,text,uuid) from public,anon,authenticated,service_role;
+revoke all on function public.checkpoint_career_operation(uuid,uuid,jsonb) from public,anon,authenticated,service_role;
+revoke all on function public.release_career_operation(uuid,uuid,boolean) from public,anon,authenticated,service_role;
+revoke all on function public.finalize_career_analysis(uuid,uuid,jsonb) from public,anon,authenticated,service_role;
+revoke all on function public.finalize_career_gap(uuid,uuid) from public,anon,authenticated,service_role;
 commit;

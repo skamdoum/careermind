@@ -206,3 +206,22 @@ test("request body cannot override authenticated identity for privileged calls",
   assert.equal((await analyze(request({resumeText:"My experience",jobDescription:"PM job",userId:"victim",p_user_id:"victim"}))).status,200);
   assert.ok(calls.length>0);assert.ok(calls.every(c=>c.args.p_user_id==="owner"));
 });
+
+test("retry key survives a fresh module load with the same tab storage",async()=>{
+  const modulePath=require.resolve("../../lib/ai-operations/client.ts");
+  const previous=Object.getOwnPropertyDescriptor(globalThis,"sessionStorage"),saved=new Map<string,string>();
+  Object.defineProperty(globalThis,"sessionStorage",{configurable:true,value:{getItem:(k:string)=>saved.get(k)??null,setItem:(k:string,v:string)=>saved.set(k,v),removeItem:(k:string)=>saved.delete(k)}});
+  try {
+    const payload={content:"Answer",question_id:"question"};
+    const first=await require(modulePath).retryKey("reload",payload);
+    delete require.cache[modulePath];
+    assert.equal((await require(modulePath).retryKey("reload",payload)).key,first.key);
+    first.clear();
+  } finally { if(previous) Object.defineProperty(globalThis,"sessionStorage",previous);else Reflect.deleteProperty(globalThis,"sessionStorage"); }
+});
+test("investigation reload renders the saved pending answer in its input",()=>{
+  const React=require("react"),{renderToStaticMarkup}=require("react-dom/server");
+  const Component=require("../../app/dashboard/gap-investigations/[id]/investigation-client.tsx").default;
+  const html=renderToStaticMarkup(React.createElement(Component,{initialBundle:{investigation:{id:"inv",status:"active"},turns:[{id:"q",role:"assistant",content:"Question"},{id:"u",role:"user",content:"Saved pending answer"}],evidence:[]}}));
+  assert.match(html,/<textarea[^>]*>Saved pending answer<\/textarea>/);
+});

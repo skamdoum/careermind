@@ -202,3 +202,13 @@ Production build, separate TypeScript, scoped lint for security-touched code and
 `git diff --check` passed. Repository-wide lint remains a known legacy failure
 (26 errors / 2 warnings at the prior release review); no unrelated lint cleanup
 was included. No production migration was applied.
+
+## Independent PR review follow-up
+
+Migration 2 now revokes API-role access to all transitional operation signatures;
+there is no intentional authenticated execution interval before migration 3.
+The migration order and write pause still apply. Expanded verification passed
+24 handler/client tests and 59 PostgreSQL 16 checks, including the 16-case recovery
+matrix and different-key concurrent claims. See `pr-review-follow-up.md` for the
+finding classifications and remaining staging requirements. Fresh module loads
+and server-rendered pending input are covered; authenticated browser E2E is not.

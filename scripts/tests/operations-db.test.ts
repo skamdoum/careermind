@@ -46,7 +46,16 @@ async function main() {
   try {
     sql(readFileSync("scripts/tests/base-schema.fixture.sql","utf8"));
     const migrations = ["20260823183756_career_profiles.sql","20260823203857_signal_gap_codes.sql","20260823205615_career_goal_description.sql","20260923000001_gap_investigations.sql","20261003000001_gap_investigation_dimensions.sql","20261010000001_rate_limits.sql","20261010000002_ai_operation_correctness.sql","20261010000003_trusted_ai_rpcs.sql"];
-    for(const file of migrations) sql(readFileSync(`supabase/migrations/${file}`,"utf8"));
+    for(const file of migrations) {
+      sql(readFileSync(`supabase/migrations/${file}`,"utf8"));
+      if(file === "20261010000002_ai_operation_correctness.sql") {
+        test("migration 2 has no browser-accessible operation interval before migration 3",()=>{
+          const signatures=["lookup_career_operation(text,text,text)","claim_career_operation(text,text,text,jsonb,uuid,text,uuid)","checkpoint_career_operation(uuid,uuid,jsonb)","release_career_operation(uuid,uuid,boolean)","finalize_career_analysis(uuid,uuid,jsonb)","finalize_career_gap(uuid,uuid)"];
+          for(const signature of signatures) for(const role of ["anon","authenticated","service_role"]) assert.equal(sql(`select has_function_privilege('${role}','${signature}','execute');`),"f");
+          assert.throws(()=>browser("select claim_career_operation('analyze','forge','h','{}');"),/permission denied for function/);
+        });
+      }
+    }
     test("all three remediation migrations apply and can be applied again",()=>{
       sql(readFileSync(`supabase/migrations/${migrations[5]}`,"utf8"));
       sql(readFileSync(`supabase/migrations/${migrations[6]}`,"utf8"));
@@ -335,6 +344,55 @@ async function main() {
       assert.equal(sql("select (select count(*) from analyses),(select count(*) from gap_investigation_turns),(select count(*) from gap_investigation_evidence);"),counts);
       sql(readFileSync("supabase/migrations/20261010000002_ai_operation_correctness.sql","utf8"));
       sql(readFileSync("supabase/migrations/20261010000003_trusted_ai_rpcs.sql","utf8"));
+    });
+    // Review recovery matrix: optional question identity, changed keys and
+    // expired leases both before and after a checkpoint, using real RPCs.
+    for(const initialQuestion of [false,true]) for(const retryQuestion of [false,true]) for(const changedKey of [false,true]) for(const savedOutput of [false,true]) {
+      test(`expired turn recovery: initialQuestion=${initialQuestion}, retryQuestion=${retryQuestion}, changedKey=${changedKey}, checkpoint=${savedOutput}`,()=>{
+        // Expire fixture quota rows without deleting referenced history.
+        sql("update rate_limit_events set created_at=now()-interval '2 hours';");
+        const investigation=sql(`insert into gap_investigations(user_id,career_profile_id,status) values('${uid}','${profile}','active') returning id;`);
+        const q=sql(`insert into gap_investigation_turns(investigation_id,user_id,role,content,turn_index) values('${investigation}','${uid}','assistant','Question',0) returning id;`);
+        const key=`matrix-${investigation}`,hash=`answer-${investigation}`;
+        const first=claim("gap_turn",key,hash,{},`'${investigation}','Same answer',${initialQuestion?quote(q):"null"}`);
+        if(savedOutput) checkpoint(first,{agent});
+        const originalEvent=sql(`select event_id from career_ai_operations where id='${first.id}';`);
+        assert.equal(claim("gap_turn",changedKey?key+"-retry":key,hash,{},`'${investigation}','Same answer',${retryQuestion?quote(q):"null"}`).outcome,"in_progress");
+        sql(`update career_ai_operations set lease_until=now()-interval '1 minute' where id='${first.id}';`);
+        const recovered=claim("gap_turn",changedKey?key+"-retry":key,hash,{},`'${investigation}','Same answer',${retryQuestion?quote(q):"null"}`);
+        assert.equal(recovered.outcome,"claimed");assert.equal(recovered.id,first.id);
+        assert.equal(sql(`select question_id from career_ai_operations where id='${first.id}';`),q);
+        const newEvent=sql(`select event_id from career_ai_operations where id='${first.id}';`);
+        assert.equal(newEvent===originalEvent,savedOutput);
+        assert.equal(sql(`select status from rate_limit_events where id='${originalEvent}';`),savedOutput?"in_progress":"failed");
+        rejected(`select checkpoint_career_operation('${first.id}','${first.token}','{}');`);
+        release(first,true);assert.equal(sql(`select status from rate_limit_events where id='${newEvent}';`),"in_progress");
+        if(!savedOutput) checkpoint(recovered,{agent});
+        finalizeGap(recovered);finalizeGap(recovered);
+        assert.equal(sql(`select string_agg(role,',' order by turn_index) from gap_investigation_turns where investigation_id='${investigation}';`),"assistant,user,assistant");
+        assert.equal(sql(`select count(distinct turn_index),count(*) from gap_investigation_turns where investigation_id='${investigation}';`),"3|3");
+        assert.equal(sql(`select turn_count from gap_investigations where id='${investigation}';`),"1");
+        assert.equal(sql(`select status from rate_limit_events where id='${newEvent}';`),"completed");
+        // Original key or original question identifies a completed exchange.
+        assert.equal(claim("gap_turn",key,hash,{},`'${investigation}','Same answer',null`).outcome,"completed");
+        assert.equal(claim("gap_turn",key+"-replay",hash,{},`'${investigation}','Same answer','${q}'`).outcome,"completed");
+        const latest=sql(`select id from gap_investigation_turns where investigation_id='${investigation}' order by turn_index desc limit 1;`);
+        assert.equal(claim("gap_turn",key,hash,{},`'${investigation}','Same answer','${latest}'`).outcome,"conflict");
+      });
+    }
+    sql("update rate_limit_events set created_at=now()-interval '2 hours';");
+    const tabsInv=sql(`insert into gap_investigations(user_id,career_profile_id,status) values('${uid}','${profile}','active') returning id;`);
+    const tabsQ=sql(`insert into gap_investigation_turns(investigation_id,user_id,role,content,turn_index) values('${tabsInv}','${uid}','assistant','Tabs question',0) returning id;`);
+    const tabs=await concurrent(`select claim_career_operation('gap_turn',gen_random_uuid()::text,'tabs-h','{}','${tabsInv}','Tabs answer','${tabsQ}');`);
+    test("concurrent tabs with different keys produce one worker, answer and quota event",()=>{
+      const replies=tabs.map(x=>JSON.parse(x)),worker=replies.find(x=>x.outcome==="claimed");
+      assert.equal(replies.filter(x=>x.outcome==="claimed").length,1);
+      assert.equal(replies.filter(x=>x.outcome==="in_progress").length,9);
+      assert.equal(sql(`select count(*) from gap_investigation_turns where investigation_id='${tabsInv}' and role='user';`),"1");
+      assert.equal(sql(`select count(*) from rate_limit_events where idempotency_key like '${worker.id}:%';`),"1");
+      checkpoint(worker,{agent});finalizeGap(worker);
+      assert.equal(sql(`select count(*) from gap_investigation_turns where investigation_id='${tabsInv}';`),"3");
+      assert.equal(claim("gap_turn","tabs-replay","tabs-h",{},`'${tabsInv}','Tabs answer','${tabsQ}'`).outcome,"completed");
     });
     console.log(`\n${passed} database checks passed (PostgreSQL fixture; no OpenAI calls).`);
   } finally {

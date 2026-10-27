@@ -59,7 +59,7 @@ export default function ActionPlan() {
     }
   }
 
-  if (error && !data) return <EmptyState title="Could not load your action plan" description={error} action={<button className="underline" onClick={() => { setError(null); setAttempt(value => value + 1); }}>Try again</button>} />;
+  if (error) return <EmptyState title="Could not load your action plan" description={error} action={<button className="underline" onClick={() => { setData(null); setError(null); setAttempt(value => value + 1); }}>Try again</button>} />;
   if (!data) return <p className="text-[13px] text-[color:var(--color-text-muted)]" role="status">Loading action plan…</p>;
   return <ActionPlanView data={data} saving={saving} taskErrors={taskErrors} onStatusChange={updateStatus} />;
 }

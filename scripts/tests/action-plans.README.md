@@ -40,3 +40,18 @@ No database records, grants, migrations or production configuration were changed
 
 Phase 2a's branch/PR, operation RPCs, and tests are not dependencies of this work.
 Semantic matching, proposals, investigation APIs and Increment 2 are excluded.
+
+## PR #2 reload-error follow-up (2026-10-26)
+
+Any load error now takes precedence over retained plan data. Retry clears that
+data before clearing the error, so stale tasks do not reappear while waiting for
+a successful response. Successful loads and acknowledged task saves are unchanged.
+The regression supplies previously loaded data and a reload error through mocked
+React hook state, then runs the actual component, retry callback and rendered
+children. It verifies the error is visible, stale tasks are hidden and retry shows
+loading rather than the old plan. It is not a real browser lifecycle test.
+
+All 13 original tests plus the regression passed (14 total). Separate TypeScript,
+scoped ESLint, production build and diff checks passed. A read-only Supabase auth
+health request again failed with ENOTFOUND. Live login, load/save/refresh and
+cross-user RLS verification were not performed; no production data was modified.

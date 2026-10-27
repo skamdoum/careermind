@@ -154,3 +154,46 @@ test("saving task disables its controls and shows only its error", async () => {
   reset(); const markup = html(await data(), { saving: ["t1"], taskErrors: { t1: "Save failed" } });
   assert.match(markup, /<fieldset disabled=""/); assert.match(markup, /Saving…/); assert.match(markup, /role="alert"[^>]*>Save failed/);
 });
+
+test("failed reload with previously loaded data shows the error and retry cannot reveal stale tasks", async () => {
+  reset();
+  const savedData = await data();
+  const states: any[] = [savedData, "Reload failed", 0, [], {}];
+  let hook = 0;
+  const path = require.resolve("../../app/dashboard/ActionPlan.tsx");
+  const cached = require.cache[path];
+  const loader = (Module as any)._load;
+  // Supply React hook state at the failed-reload boundary. The production
+  // component, error branch, retry callback and rendered children run unchanged.
+  const hooks = {
+    ...React,
+    useState: () => {
+      const index = hook++;
+      return [states[index], (value: any) => { states[index] = typeof value === "function" ? value(states[index]) : value; }];
+    },
+    useRef: () => ({ current: new Set() }),
+    useEffect: () => {},
+  };
+  delete require.cache[path];
+  (Module as any)._load = function(name: string, ...args: unknown[]) {
+    return name === "react" ? hooks : loader.call(this, name, ...args);
+  };
+  try {
+    const Component = require(path).default;
+    const element = Component();
+    const markup = renderToStaticMarkup(element);
+    assert.match(markup, /Could not load your action plan/);
+    assert.match(markup, /Reload failed/);
+    assert.ok(!markup.includes("Document platform ownership"));
+    assert.ok(!markup.includes("Platform search"));
+    element.props.action.props.onClick();
+    assert.equal(states[0], null); assert.equal(states[1], null); assert.equal(states[2], 1);
+    hook = 0;
+    const retryMarkup = renderToStaticMarkup(Component());
+    assert.match(retryMarkup, /Loading action plan/);
+    assert.ok(!retryMarkup.includes("Document platform ownership"));
+  } finally {
+    (Module as any)._load = loader;
+    if (cached) require.cache[path] = cached; else delete require.cache[path];
+  }
+});

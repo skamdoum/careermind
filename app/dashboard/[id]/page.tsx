@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { existingActiveProfile, readSavedInvestigations, investigationsForGap } from "@/lib/gap-investigation/saved";
+import { existingActiveProfile, readSavedInvestigations, readSavedAnswerCounts, investigationsForGap } from "@/lib/gap-investigation/saved";
+import SessionIdentity from "../gap-investigations/session-identity";
 import type { SavedInvestigation } from "@/lib/gap-investigation/saved";
 import { createClient } from "@/lib/supabase/server";
 import PageHeader from "@/app/components/ui/PageHeader";
@@ -74,8 +75,15 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
 
   let savedInvestigations: SavedInvestigation[] = [];
   let investigationError: string | null = null;
+  let answerCountError: string | null = null;
   try {
     savedInvestigations = await readSavedInvestigations(supabase, user.id, profileId, id);
+    try {
+      const counts = await readSavedAnswerCounts(supabase, user.id, savedInvestigations.map(row => row.id));
+      savedInvestigations = savedInvestigations.map(row => ({ ...row, saved_answer_count: counts.get(row.id) }));
+    } catch {
+      answerCountError = "Saved answer counts are unavailable. You can still open your investigations; reload to refresh progress.";
+    }
   } catch {
     investigationError = "Saved investigations could not be loaded. Reload this page before starting another investigation.";
   }
@@ -235,6 +243,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
           title="Key gaps"
           meta={data?.gaps?.length ? `${data.gaps.length} gaps` : "0 gaps"}
         />
+        {answerCountError && <p role="alert" className="text-[13px] text-[color:var(--color-text-muted)]">{answerCountError}</p>}
         {unlinkedInvestigations.length > 0 && (
           <details className="text-[13px]">
             <summary>Other saved investigations from this analysis ({unlinkedInvestigations.length})</summary>
@@ -242,8 +251,9 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
             <ul>
               {unlinkedInvestigations.map(row => <li key={row.id}>
                 <Link className="underline" href={`/dashboard/gap-investigations/${row.id}`}>
-                  {row.created_at} · {row.status} · {row.id.slice(0, 8)}
+                  View saved investigation
                 </Link>
+                <SessionIdentity investigation={row} />
               </li>)}
             </ul>
           </details>

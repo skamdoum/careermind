@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import PlanRecommendationSection from "./plan-recommendation";
 import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
 import type {
@@ -203,6 +204,11 @@ export default function InvestigationClient({ initialBundle }: Props) {
             </div>
           </Card>
         )}
+
+        {concluded && <PlanRecommendationSection
+          key={JSON.stringify([investigation.id, investigation.updated_at, evidence.map(row => [row.id, row.user_status, row.user_edit, row.updated_at])])}
+          investigationId={investigation.id}
+        />}
 
         <div className="space-y-3">
           {turns.map((t) => (

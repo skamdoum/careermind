@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { existingActiveProfile, INITIALIZATION_ERROR } from "@/lib/gap-investigation/saved";
 import PageHeader from "@/app/components/ui/PageHeader";
 import { loadInvestigationBundle } from "@/lib/db/gap-investigations";
 import InvestigationClient from "./investigation-client";
@@ -23,7 +24,8 @@ export default async function GapInvestigationPage({ params }: PageProps) {
     redirect("/login");
   }
 
-  const bundle = await loadInvestigationBundle(id, user.id);
+  const profileId = await existingActiveProfile(supabase, user.id);
+  const bundle = profileId ? await loadInvestigationBundle(id, user.id, profileId) : null;
 
   if (!bundle) {
     return (
@@ -71,7 +73,14 @@ export default async function GapInvestigationPage({ params }: PageProps) {
         </Link>
       </div>
 
-      <InvestigationClient initialBundle={bundle} />
+      {bundle.turns.some(turn => turn.role === "assistant" && turn.turn_index === 0) ? (
+        <InvestigationClient initialBundle={bundle} />
+      ) : (
+        <div role="alert" className="space-y-2 text-[13px]">
+          <p>{INITIALIZATION_ERROR}</p>
+          <a className="underline" href={`/dashboard/gap-investigations/${id}`}>Reload investigation</a>
+        </div>
+      )}
     </div>
   );
 }

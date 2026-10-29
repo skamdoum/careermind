@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
+import { existingActiveProfile, readSavedInvestigations, investigationsForGap } from "@/lib/gap-investigation/saved";
+import type { SavedInvestigation } from "@/lib/gap-investigation/saved";
 import { createClient } from "@/lib/supabase/server";
 import PageHeader from "@/app/components/ui/PageHeader";
 import SectionHeader from "@/app/components/ui/SectionHeader";
@@ -29,14 +30,17 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     redirect("/login");
   }
 
-  const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
+  const profileId = await existingActiveProfile(supabase, user.id);
+  if (!profileId) {
+    return <PageHeader title="Select a job search" description="Choose an existing job search to open this analysis." />;
+  }
 
   const { data: analysis, error } = await supabase
     .from("analyses")
     .select("*")
     .eq("id", id)
     .eq("user_id", user.id)
-    .eq("career_profile_id", activeProfile.id)
+    .eq("career_profile_id", profileId)
     .single();
 
   if (error || !analysis) {
@@ -67,6 +71,16 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     .eq("analysis_id", id)
     .eq("user_id", user.id)
     .order("priority", { ascending: true });
+
+  let savedInvestigations: SavedInvestigation[] = [];
+  let investigationError: string | null = null;
+  try {
+    savedInvestigations = await readSavedInvestigations(supabase, user.id, profileId, id);
+  } catch {
+    investigationError = "Saved investigations could not be loaded. Reload this page before starting another investigation.";
+  }
+  // A deleted/replaced gap must not make its analysis's saved history disappear.
+  const unlinkedInvestigations = savedInvestigations.filter(row => !gapRows?.some(gap => gap.id === row.seed_gap_id));
 
   const data = analysis.raw_json as {
     core_verdict?: string;
@@ -114,13 +128,13 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
         .from("analyses")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
+        .eq("career_profile_id", profileId)
         .eq("career_goal_id", goalIdForNext),
       supabase
         .from("job_descriptions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
+        .eq("career_profile_id", profileId)
         .eq("career_goal_id", goalIdForNext),
       // Find the newest job under this goal that isn't the one we
       // just analyzed. We deep-link to it as the "next role" CTA.
@@ -128,7 +142,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
         .from("job_descriptions")
         .select("id")
         .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
+        .eq("career_profile_id", profileId)
         .eq("career_goal_id", goalIdForNext)
         .neq("id", analysis.job_description_id ?? "")
         .order("created_at", { ascending: false })
@@ -221,6 +235,19 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
           title="Key gaps"
           meta={data?.gaps?.length ? `${data.gaps.length} gaps` : "0 gaps"}
         />
+        {unlinkedInvestigations.length > 0 && (
+          <details className="text-[13px]">
+            <summary>Other saved investigations from this analysis ({unlinkedInvestigations.length})</summary>
+            <p>The originating gap is no longer listed. These records are kept as history.</p>
+            <ul>
+              {unlinkedInvestigations.map(row => <li key={row.id}>
+                <Link className="underline" href={`/dashboard/gap-investigations/${row.id}`}>
+                  {row.created_at} · {row.status} · {row.id.slice(0, 8)}
+                </Link>
+              </li>)}
+            </ul>
+          </details>
+        )}
 
         {data?.gaps && data.gaps.length > 0 ? (
           <div className="rounded-[6px] border border-[color:var(--color-border-standard)] bg-[color:var(--color-surface)] divide-y divide-[color:var(--color-border-subtle)] overflow-hidden">
@@ -240,7 +267,7 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
                   />
                   {persisted?.id && (
                     <div className="px-4 pb-3">
-                      <InvestigateGapButton gapId={persisted.id} />
+                      <InvestigateGapButton gapId={persisted.id} saved={investigationsForGap(savedInvestigations, persisted.id)} loadError={investigationError} />
                     </div>
                   )}
                 </div>

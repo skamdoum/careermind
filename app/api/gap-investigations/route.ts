@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
+import { existingActiveProfile, readSavedInvestigations, investigationsForGap, hasInitialAssistantTurn, INITIALIZATION_ERROR } from "@/lib/gap-investigation/saved";
 import {
   AGENT_MODEL_NAME,
   runAgentTurn,
@@ -34,10 +34,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const activeProfile = await resolveActiveCareerProfile(
-      supabase,
-      user.id
-    );
+    const profileId = await existingActiveProfile(supabase, user.id);
+    if (!profileId) return NextResponse.json({ success: false, error: "Select an existing job search first." }, { status: 409 });
 
     const body = await req.json().catch(() => ({}));
     const gapId =
@@ -81,7 +79,7 @@ export async function POST(req: Request) {
       )
       .eq("id", seedGap.analysis_id)
       .eq("user_id", user.id)
-      .eq("career_profile_id", activeProfile.id)
+      .eq("career_profile_id", profileId)
       .maybeSingle();
 
     if (analysisErr) {
@@ -99,6 +97,17 @@ export async function POST(req: Request) {
         },
         { status: 404 }
       );
+    }
+
+    // Reuse before storage downloads, uploads, inserts or agent work.
+    // This read-before-insert check is NOT an atomic cross-instance claim.
+    const saved = await readSavedInvestigations(supabase, user.id, profileId, analysis.id);
+    const { primary } = investigationsForGap(saved, seedGap.id);
+    if (primary) {
+      if (!await hasInitialAssistantTurn(supabase, user.id, primary.id)) {
+        return NextResponse.json({ success: false, error: INITIALIZATION_ERROR, data: { investigation_id: primary.id } }, { status: 409 });
+      }
+      return NextResponse.json({ success: true, data: { investigation_id: primary.id } });
     }
 
     // Resolve target role/level via career_goal + job_description.
@@ -141,7 +150,7 @@ export async function POST(req: Request) {
         .select("id, file_path, file_name, mime_type")
         .eq("id", analysis.resume_id)
         .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
+        .eq("career_profile_id", profileId)
         .maybeSingle();
       if (r) resumeRow = r;
     }
@@ -153,7 +162,7 @@ export async function POST(req: Request) {
         .from("resumes")
         .select("id, file_path, file_name, mime_type")
         .eq("user_id", user.id)
-        .eq("career_profile_id", activeProfile.id)
+        .eq("career_profile_id", profileId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -230,7 +239,7 @@ export async function POST(req: Request) {
       .from("gap_investigations")
       .insert({
         user_id: user.id,
-        career_profile_id: activeProfile.id,
+        career_profile_id: profileId,
         seed_gap_id: seedGap.id,
         seed_analysis_id: analysis.id,
         gap_code: seedGap.gap_code ?? null,
@@ -268,12 +277,8 @@ export async function POST(req: Request) {
         prior_decision_state: null,
       });
     } catch (agentErr: unknown) {
-      // Roll back the investigation row so the user doesn't see a
-      // half-created investigation with no first question.
-      await supabaseAdmin
-        .from("gap_investigations")
-        .delete()
-        .eq("id", created.id);
+      // Keep the reserved row and any persisted data. Discovery/detail will
+      // report incomplete initialization, never silently restart the agent.
       const msg =
         agentErr instanceof Error ? agentErr.message : "Agent kickoff failed";
       return NextResponse.json(

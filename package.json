@@ -10,7 +10,9 @@
     "eval": "tsx scripts/eval/run.ts",
     "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
     "eval:rescore": "tsx scripts/eval/rescore.ts",
-    "test:action-plans": "node --import tsx --test scripts/tests/action-plans.test.ts"
+    "test:action-plans": "node --import tsx --test scripts/tests/action-plans.test.ts",
+    "test:plan-recommendations": "node --import tsx --test scripts/tests/plan-recommendations.test.ts",
+    "eval:plan-recommendations": "node --import tsx scripts/eval/plan-recommendations/run.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

@@ -57,19 +57,28 @@ export default function InvestigationClient({ initialBundle }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollAfterAnswer = useRef(false);
 
   const { investigation, turns, evidence } = bundle;
   const concluded = investigation.status === "concluded";
   const active = investigation.status === "active";
+  const lastTurn = turns.at(-1);
+  const currentQuestionId = active && lastTurn?.role === "assistant" ? lastTurn.id : null;
+  const canAnswer = active && currentQuestionId !== null;
+  const savedAnswers = turns.filter(turn => turn.role === "user").length;
 
   useEffect(() => {
-    // Scroll the newest turn into view whenever the transcript grows.
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turns.length, sending]);
+    // Reopening starts at the saved history. Only an explicit answer submission
+    // moves the viewport to the newly saved response/question.
+    if (scrollAfterAnswer.current) {
+      scrollAfterAnswer.current = false;
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [turns]);
 
   async function submitTurn() {
     const trimmed = content.trim();
-    if (!trimmed || sending || !active) return;
+    if (!trimmed || sending || !canAnswer) return;
     setSending(true);
     setError(null);
     try {
@@ -85,6 +94,7 @@ export default function InvestigationClient({ initialBundle }: Props) {
       if (!res.ok || !json?.success) {
         throw new Error(json?.error || "Failed to send your answer");
       }
+      scrollAfterAnswer.current = true;
       setBundle(json.data as InvestigationBundle);
       setContent("");
     } catch (e: unknown) {
@@ -205,7 +215,13 @@ export default function InvestigationClient({ initialBundle }: Props) {
           </Card>
         )}
 
-        <div className="space-y-3">
+        <section className="space-y-3" aria-label="Investigation conversation">
+          <div>
+            <h2 className="text-[14px] font-semibold">Saved conversation</h2>
+            <p className="text-[12px] text-[color:var(--color-text-muted)]">
+              {savedAnswers === 0 ? canAnswer ? "No answers saved yet. Start with the question below." : "No user responses were saved." : `${savedAnswers} saved ${savedAnswers === 1 ? "answer" : "answers"} · Questions and responses are shown in order.`}
+            </p>
+          </div>
           {turns.map((t) => (
             <div
               key={t.id}
@@ -216,7 +232,7 @@ export default function InvestigationClient({ initialBundle }: Props) {
               }
             >
               <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[color:var(--color-text-muted)] mb-1">
-                {t.role === "assistant" ? "CareerMind" : "You"}
+                {t.role === "assistant" ? t.id === currentQuestionId ? "CareerMind · Current question" : "CareerMind" : "You · Saved response"}
               </div>
               <p className="text-[14px] leading-[1.6] text-[color:var(--color-text-primary)] whitespace-pre-wrap">
                 {t.content}
@@ -224,10 +240,16 @@ export default function InvestigationClient({ initialBundle }: Props) {
             </div>
           ))}
           <div ref={bottomRef} />
-        </div>
+        </section>
 
         {!active && !concluded && <p className="text-[13px]">This investigation is abandoned. Its saved conversation remains available.</p>}
-        {active && (
+        {active && !canAnswer && (
+          <div role="alert" className="text-[13px] space-y-2">
+            <p>Your last response is saved, but the next question is unavailable. Reload to check again. No conversation will be regenerated automatically.</p>
+            <a className="underline" href={`/dashboard/gap-investigations/${investigation.id}`}>Reload investigation</a>
+          </div>
+        )}
+        {canAnswer && (
           <div className="space-y-2">
             <textarea
               value={content}

@@ -50,6 +50,25 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
     );
   }
 
+  // Resolve only this analysis's persisted source IDs. Never substitute the
+  // latest resume/job, legacy display labels, or AI-generated analysis text.
+  const [resumeMetadata, jobMetadata] = await Promise.all([
+    analysis.resume_id
+      ? supabase.from("resumes").select("file_name").eq("id", analysis.resume_id)
+        .eq("user_id", user.id).eq("career_profile_id", analysis.career_profile_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    analysis.job_description_id
+      ? supabase.from("job_descriptions").select("role_title").eq("id", analysis.job_description_id)
+        .eq("user_id", user.id).eq("career_profile_id", analysis.career_profile_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  const fileName = resumeMetadata.data?.file_name;
+  const roleTitle = jobMetadata.data?.role_title;
+  const resumeLabel = resumeMetadata.error ? "Resume metadata temporarily unavailable"
+    : typeof fileName === "string" && fileName.trim() ? fileName : "Resume filename unavailable for this analysis";
+  const jobLabel = jobMetadata.error ? "Target job metadata temporarily unavailable"
+    : typeof roleTitle === "string" && roleTitle.trim() ? roleTitle : "Target job title unavailable for this analysis";
+
   const { data: plan } = await supabase
     .from("plans")
     .select("*")
@@ -160,14 +179,11 @@ export default async function AnalysisDetailPage({ params }: PageProps) {
           { label: "Created", value: createdLabel },
           {
             label: "Resume",
-            value: analysis.resume_name || "Latest uploaded resume",
+            value: <span title={resumeLabel}>{resumeLabel}</span>,
           },
           {
             label: "Target job",
-            value:
-              analysis.job_title ||
-              data?.company_name ||
-              "Pasted job description",
+            value: <span title={jobLabel}>{jobLabel}</span>,
           },
         ]}
       />

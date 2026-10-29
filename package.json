@@ -3,15 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "eval": "tsx scripts/eval/run.ts",
-    "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
-    "eval:rescore": "tsx scripts/eval/rescore.ts",
-    "test:investigation-navigation": "node --import tsx --test scripts/tests/investigation-navigation.test.ts",
-    "test:action-plans": "node --import tsx --test scripts/tests/action-plans.test.ts"
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "eslint",
+  "eval": "tsx scripts/eval/run.ts",
+  "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
+  "eval:rescore": "tsx scripts/eval/rescore.ts",
+  "test:investigation-navigation": "node --import tsx --test scripts/tests/investigation-navigation.test.ts",
+  "test:action-plans": "node --import tsx --test scripts/tests/action-plans.test.ts",
+  "test:analysis-metadata": "node --import tsx --test scripts/tests/analysis-metadata.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

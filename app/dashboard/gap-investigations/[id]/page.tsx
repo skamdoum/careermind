@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { existingActiveProfile, INITIALIZATION_ERROR } from "@/lib/gap-investigation/saved";
 import PageHeader from "@/app/components/ui/PageHeader";
 import { loadInvestigationBundle } from "@/lib/db/gap-investigations";
+import type { InvestigationBundle } from "@/lib/db/gap-investigations";
 import InvestigationClient from "./investigation-client";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +25,18 @@ export default async function GapInvestigationPage({ params }: PageProps) {
     redirect("/login");
   }
 
-  const profileId = await existingActiveProfile(supabase, user.id);
-  const bundle = profileId ? await loadInvestigationBundle(id, user.id, profileId) : null;
+  let bundle: InvestigationBundle | null;
+  try {
+    const profileId = await existingActiveProfile(supabase, user.id);
+    bundle = profileId ? await loadInvestigationBundle(id, user.id, profileId) : null;
+  } catch {
+    return (
+      <div className="mx-auto max-w-4xl w-full px-6 py-6 space-y-4" role="alert">
+        <PageHeader title="Conversation could not be loaded" description="Your saved data has not been changed. Reload this investigation to try again." />
+        <a className="text-[13px] underline" href={`/dashboard/gap-investigations/${id}`}>Reload investigation</a>
+      </div>
+    );
+  }
 
   if (!bundle) {
     return (
@@ -74,7 +85,7 @@ export default async function GapInvestigationPage({ params }: PageProps) {
       </div>
 
       {bundle.turns.some(turn => turn.role === "assistant" && turn.turn_index === 0) ? (
-        <InvestigationClient initialBundle={bundle} />
+        <InvestigationClient key={investigation.id} initialBundle={bundle} />
       ) : (
         <div role="alert" className="space-y-2 text-[13px]">
           <p>{INITIALIZATION_ERROR}</p>

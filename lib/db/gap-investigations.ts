@@ -180,6 +180,20 @@ export type InvestigationBundle = {
 // is still the second line of defense against a leaked admin call.
 // ---------------------------------------------------------------------
 
+async function loadSavedTurns(investigationId: string, userId: string): Promise<GapInvestigationTurnRow[]> {
+  const turns: GapInvestigationTurnRow[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const { data, error } = await supabaseAdmin.from("gap_investigation_turns").select("*")
+      .eq("investigation_id", investigationId).eq("user_id", userId)
+      .order("turn_index", { ascending: true }).order("created_at", { ascending: true }).order("id", { ascending: true })
+      .range(offset, offset + 99);
+    if (error) throw new Error("Could not load the saved conversation. Reload to try again; your saved data has not been changed.");
+    const page = (data ?? []) as GapInvestigationTurnRow[];
+    turns.push(...page);
+    if (page.length < 100) return turns;
+  }
+}
+
 export async function loadInvestigationBundle(
   investigationId: string,
   userId: string,
@@ -198,13 +212,8 @@ export async function loadInvestigationBundle(
   }
   if (!investigation) return null;
 
-  const [turnsRes, evidenceRes] = await Promise.all([
-    supabaseAdmin
-      .from("gap_investigation_turns")
-      .select("*")
-      .eq("investigation_id", investigationId)
-      .eq("user_id", userId)
-      .order("turn_index", { ascending: true }),
+  const [turns, evidenceRes] = await Promise.all([
+    loadSavedTurns(investigationId, userId),
     supabaseAdmin
       .from("gap_investigation_evidence")
       .select("*")
@@ -213,8 +222,8 @@ export async function loadInvestigationBundle(
       .order("created_at", { ascending: true }),
   ]);
 
-  if (turnsRes.error) {
-    throw new Error(`Failed to load turns: ${turnsRes.error.message}`);
+  if (investigation.turn_count > turns.filter(turn => turn.role === "user").length) {
+    throw new Error("The saved conversation could not be restored completely. Reload to try again; your saved data has not been changed.");
   }
   if (evidenceRes.error) {
     throw new Error(`Failed to load evidence: ${evidenceRes.error.message}`);
@@ -222,7 +231,7 @@ export async function loadInvestigationBundle(
 
   return {
     investigation: investigation as GapInvestigationRow,
-    turns: (turnsRes.data ?? []) as GapInvestigationTurnRow[],
+    turns,
     evidence: (evidenceRes.data ?? []) as GapInvestigationEvidenceRow[],
   };
 }

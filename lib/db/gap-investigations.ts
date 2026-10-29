@@ -182,14 +182,16 @@ export type InvestigationBundle = {
 
 export async function loadInvestigationBundle(
   investigationId: string,
-  userId: string
+  userId: string,
+  careerProfileId?: string
 ): Promise<InvestigationBundle | null> {
-  const { data: investigation, error: invErr } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("gap_investigations")
     .select("*")
     .eq("id", investigationId)
-    .eq("user_id", userId)
-    .maybeSingle();
+    .eq("user_id", userId);
+  if (careerProfileId) query = query.eq("career_profile_id", careerProfileId);
+  const { data: investigation, error: invErr } = await query.maybeSingle();
 
   if (invErr) {
     throw new Error(`Failed to load investigation: ${invErr.message}`);

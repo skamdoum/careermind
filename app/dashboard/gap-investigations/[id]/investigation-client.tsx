@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
+import SessionIdentity from "../session-identity";
 import type {
   InvestigationBundle,
   GapInvestigationEvidenceRow,
@@ -138,6 +139,7 @@ export default function InvestigationClient({ initialBundle }: Props) {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {/* Conversation column */}
       <div className="md:col-span-2 space-y-4">
+        <SessionIdentity investigation={{ ...investigation, saved_answer_count: savedAnswers }} />
         {concluded && investigation.conclusion && (
           <Card intent="info" padding="lg">
             <div className="space-y-3">

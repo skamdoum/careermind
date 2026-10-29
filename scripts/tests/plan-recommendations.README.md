@@ -49,7 +49,7 @@ npm run test:plan-recommendations
 npm run test:action-plans
 ```
 
-46 recommendation contract/reader/handler/rendering tests and 14 Increment 1 tests
+49 recommendation contract/reader/handler/rendering tests and 14 Increment 1 tests
 passed. Network/session/provider boundaries are mocked; production logic runs
 unchanged. These tests are NOT model-accuracy evidence. Tests cover all outcomes,
 foreign user/profile/seed/task access, absent profiles without writes, missing and
@@ -121,7 +121,7 @@ corrections for contiguous quotes, user-confirmation semantics and no-action
 precedence produced raw 12/15, pipeline 12/16. Task-status isolation and empty-task
 schema restrictions then produced the final result above. The fixtures were not
 changed between runs. 60 paid provider calls total across four runs; no real user
-career data was used. The final two failures remain review findings, not passes.
+career data was used. Those two failures were review findings at the original PR head; see the follow-up below.
 
 ## Live checks and release limits
 
@@ -132,9 +132,71 @@ browser login/evaluation, deployed user-level RLS and cross-user PostgREST check
 were not performed. UI tests are React rendering tests, not browser hydration E2E.
 
 Independent review and authenticated staging verification remain required before
-release. Residual model reliability (the two rejected cases) needs assessment.
+release. Model reliability beyond the synthetic suite still needs assessment.
 There is deliberately no persistent recommendation cache, durable deduplication,
 or new quota ledger. Explicit clicks can cost another AI request; per-component
 busy protection is not cross-tab abuse prevention. Phase 2a integration, stronger
 cost controls, confirmation and writes remain outside this increment. Fingerprints
 are snapshots, not future write authorizations. No deployment is requested.
+
+## PR #3 semantic review follow-up (2026-10-28 America/New_York)
+
+The original raw outputs identified two generation failures, rather than reader or
+authorization defects. `edited-capability` correctly described the capability
+deficit but selected a contradictory no-action label. `partial-ownership` mixed
+task-coverage justification into the candidate citation list. Both were rejected
+by the existing validator.
+
+The schema previously requested the outcome first and grounding last. Structured
+Outputs emits fields in schema order ([official documentation](https://developers.openai.com/api/docs/guides/structured-outputs)).
+Grounding now precedes dimension assessment and task matching; the outcome comes
+last. Descriptions and general prompt instructions separate candidate citations
+from task coverage, require positive coverage in `matches`, distinguish accurate
+resume representation from target sufficiency, and make unknown evidence an
+abstention. Documentation suggestions must use confirmed details without invented
+illustrative achievements. This is a generation aid, not a guarantee of reasoning.
+No validator conditions, schema field limits, golden fixtures, model, authorization,
+API contracts, retry policy or database behavior changed. There is no automatic
+relabeling, citation removal, model retry or case-specific exception.
+
+Three new deterministic tests preserve the generation field order and replay the
+two invalid response patterns: contradictory no-action still fails, and task text
+still cannot be cited as candidate evidence. Mocked tests prove those boundaries,
+not model quality.
+
+Follow-up runs used the entire unchanged 16-case suite each time:
+
+- First rerun: raw 13/15; validated 14/16. The original label/citation symptoms
+  disappeared, but irrelevant tasks entered `matches`; one output failed closed
+  and `role-scope` was accepted with an incorrect partial-match label.
+- Second rerun: raw 14/15; validated 16/16. `unknown-resume` wrongly selected
+  NO_MATCH with an unknown dimension; the validator correctly returned the expected
+  grounding error. Manual review also flagged an unconfirmed illustrative metric
+  in a proposed documentation task. The final clarification addresses both patterns.
+
+- Final rerun (2026-10-29 01:22:46 UTC / 2026-10-28 local): raw **14/15
+  (93.3%)**; validated **16/16 (100%)**, including the two expected grounding
+  errors. Both requested cases classify correctly and pass unchanged grounding.
+  All 14 accepted recommendations have the expected outcome. Manual review found
+  **0 unsupported recommendations** and **0 duplicate proposals** among the
+  **9 accepted proposed tasks**.
+- Remaining raw failure: `unknown-resume` still emits NO_MATCH rather than
+  INSUFFICIENT_EVIDENCE despite marking resume evidence unknown. Its raw proposal
+  also duplicates an existing task and contains an unconfirmed tradeoff detail.
+  This is **one unsupported/duplicate raw proposal**, rejected by the unchanged
+  unknown-dimension guard. It is never returned to the client. Thus API-level
+  evaluation passes; raw model classification is not perfect. No semantic
+  guarantee or 100% raw-accuracy claim is made.
+
+These three follow-up runs made 45 paid synthetic-only provider calls; the single
+no-evidence case in each run stops before AI. No golden inputs/expectations changed.
+The final report remains local under the ignored reports directory, with the
+runner and cases committed for reproducibility. Scores reflect one final run,
+not a repeated-run stability estimate. Accepted-output manual audit is separate
+from label/schema scoring and cannot prove safety on unseen user data.
+
+Final quality gates: 49 recommendation tests + 14 Action Plan tests passed;
+scoped ESLint, production build, separate TypeScript and diff checks passed.
+Only the existing middleware-to-proxy deprecation warning remains in the build.
+No live authenticated Supabase/RLS or browser check was added in this follow-up;
+previous live-verification limits still apply. Authorization and UI are unchanged.

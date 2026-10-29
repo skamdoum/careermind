@@ -18,7 +18,12 @@ export function normalizeEvidence(rows: Array<{ id: string; claim: string; user_
 
 const text = z.string().trim().min(1).max(3000);
 export const modelAssessmentSchema = z.object({
-  outcome: z.enum(["FULL_MATCH", "PARTIAL_MATCH", "NO_MATCH", "NO_ACTION_NEEDED", "INSUFFICIENT_EVIDENCE"]),
+  // Structured Outputs emits keys in schema order. Ground candidate facts before
+  // comparing tasks, and choose the classification after the supporting fields.
+  grounding: z.array(z.object({
+    evidence_id: text,
+    quote: z.string().trim().min(10).max(3000).describe("Contiguous verbatim substring of the referenced evidence.claim ONLY. Task text belongs in matches.coverage_reason, never here."),
+  }).strict()).max(30).describe("Candidate evidence only; establish this before considering task coverage."),
   assessed_dimensions: z.object({
     underlying_capability: z.enum(["demonstrated", "partial", "not_demonstrated", "unknown"]),
     resume_evidence: z.enum(["demonstrates", "partial", "does_not_demonstrate", "unknown"]),
@@ -28,7 +33,7 @@ export const modelAssessmentSchema = z.object({
   remaining_need: text.nullable(),
   proposed_task: z.object({ title: text, description: text, task_type: z.enum(["resume", "story", "interview_prep", "application", "networking", "strategy"]) }).strict().nullable(),
   rationale: text,
-  grounding: z.array(z.object({ evidence_id: text, quote: z.string().trim().min(10).max(3000) }).strict()).max(30),
+  outcome: z.enum(["FULL_MATCH", "PARTIAL_MATCH", "NO_MATCH", "NO_ACTION_NEEDED", "INSUFFICIENT_EVIDENCE"]).describe("Choose LAST, consistently with dimensions and task coverage. NO_ACTION_NEEDED requires all dimensions satisfied and no remaining need or proposal."),
 }).strict();
 
 export function validateRecommendation(input: RecommendationInput, raw: unknown): PlanRecommendation {

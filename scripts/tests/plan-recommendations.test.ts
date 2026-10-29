@@ -163,3 +163,25 @@ test("provider failures are sanitized and perform no database writes",async()=>{
   reset();const before=JSON.stringify(db);output=()=>{throw new Error("sensitive provider details");};
   const response=await invoke(),body=await response.json();assert.equal(response.status,503);assert.ok(!JSON.stringify(body).includes("sensitive"));assert.equal(JSON.stringify(db),before);
 });
+
+test("provider schema grounds candidate facts first and selects the outcome last",async()=>{
+  reset();assert.equal((await invoke()).status,200);
+  const keys=Object.keys(providerRequest.text.format.schema.properties);
+  assert.equal(keys[0],"grounding");assert.equal(keys.at(-1),"outcome");
+  assert.ok(keys.indexOf("assessed_dimensions")<keys.indexOf("matches"));
+});
+test("edited capability deficit cannot be labeled no-action even with a correct explanation and proposal",()=>{
+  const input=goldenCases.find(row=>row.id==="edited-capability")!.input;
+  const raw={...model(),outcome:"NO_ACTION_NEEDED",assessed_dimensions:{underlying_capability:"not_demonstrated",resume_evidence:"does_not_demonstrate",target_role_fit:"does_not_meet"},matches:[],remaining_need:"Acquire independent API ownership",proposed_task:{title:"Own an API roadmap decision",description:"Seek an opportunity to independently own API roadmap decisions and measure the outcome.",task_type:"strategy"},grounding:[{evidence_id:"e1",quote:input.evidence[0].claim}]};
+  assert.throws(()=>validateRecommendation(input,raw));
+  // The same supported deficit is valid when classified consistently; no repair
+  // or relabeling of invalid model output happens in the production validator.
+  assert.equal(validateRecommendation(input,{...raw,outcome:"NO_MATCH"}).outcome,"NO_MATCH");
+});
+test("partial-match task exclusions cannot masquerade as candidate evidence",()=>{
+  const input=goldenCases.find(row=>row.id==="partial-ownership")!.input;
+  const raw={...model(),outcome:"PARTIAL_MATCH",remaining_need:"Document measured API adoption outcomes",proposed_task:{title:"Document adoption outcome",description:"Add the measured API launch adoption outcome to the resume.",task_type:"resume"}};
+  assert.equal(validateRecommendation(input,raw).outcome,"PARTIAL_MATCH");
+  raw.grounding.push({evidence_id:"e1",quote:"adoption metrics are explicitly outside this task."});
+  assert.throws(()=>validateRecommendation(input,raw));
+});

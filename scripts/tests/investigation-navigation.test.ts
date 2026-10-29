@@ -2,13 +2,14 @@
 import assert from "node:assert/strict";
 import Module, { createRequire } from "node:module";
 import { test } from "node:test";
-import { existingActiveProfile, readSavedInvestigations, investigationsForGap } from "../../lib/gap-investigation/saved";
+import { existingActiveProfile, readSavedInvestigations, readSavedAnswerCounts, investigationsForGap } from "../../lib/gap-investigation/saved";
 
 const require = createRequire(import.meta.url);
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 let client: any, db: Record<string, any[]>, failure: string | null, calls: number, writes: number, agentFailure: boolean;
 let navigations: string[] = [];
+let answerReads: Array<{ columns: string; userId: unknown; role: unknown; ids: unknown[]; offset: number }> = [];
 const load = (Module as any)._load;
 (Module as any)._load = function(name: string, ...args: unknown[]) {
   if (/lib\/supabase\/server(?:\.ts)?$/.test(name)) return { createClient: async () => client };
@@ -52,7 +53,7 @@ const { default: HookClient } = require("../../app/dashboard/gap-investigations/
 (Module as any)._load = load;
 
 function reset() {
-  failure = null; calls = 0; writes = 0; agentFailure = false; navigations = [];
+  answerReads = []; failure = null; calls = 0; writes = 0; agentFailure = false; navigations = [];
   db = {
     profiles: [{ id: "owner", active_career_profile_id: "profile" }],
     career_profiles: [{ id: "profile", user_id: "owner" }],
@@ -65,7 +66,9 @@ function reset() {
   client = { auth: { getUser: async () => ({ data: { user: { id: "owner" } }, error: null }) }, from: (table: string) => {
     const filters: Array<(row: any) => boolean> = [], sorts: any[] = [];
     let range = [0, Infinity], inserted: any[] | null = null;
+    let columns = ""; const values: Record<string, unknown> = {};
     const run = () => {
+      if (table === "gap_investigation_turns" && columns === "id,investigation_id") answerReads.push({ columns, userId: values.user_id, role: values.role, ids: values.investigation_id as unknown[], offset: range[0] });
       if (failure === table) return { data: null, error: { message: "fixture read failure" } };
       if (inserted) { db[table] ??= []; db[table].push(...inserted); inserted = null; }
       const data = (db[table] ?? []).filter(row => filters.every(f => f(row))).sort((a, b) => {
@@ -74,8 +77,8 @@ function reset() {
       return { data: structuredClone(data), error: null };
     };
     const q: any = {
-      select: () => q, eq: (key: string, value: unknown) => { filters.push(r => r[key] === value); return q; },
-      in: (key: string, values: unknown[]) => { filters.push(r => values.includes(r[key])); return q; },
+      select: (selected: string) => { columns = selected; return q; }, eq: (key: string, value: unknown) => { values[key] = value; filters.push(r => r[key] === value); return q; },
+      in: (key: string, list: unknown[]) => { values[key] = list; filters.push(r => list.includes(r[key])); return q; },
       order: (key: string, options?: { ascending?: boolean }) => { sorts.push([key, options?.ascending !== false]); return q; },
       limit: (n: number) => { range = [0, n - 1]; return q; }, range: (from: number, to: number) => { range = [from, to]; return q; },
       insert: (row: any) => { writes++; inserted = [{ ...row, id: `created-${writes}` }]; return q; },
@@ -144,12 +147,12 @@ test("failed discovery does not offer creation as though there were no saved rec
 });
 test("analysis page renders saved navigation rather than a creation button", async () => {
   reset(); const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
-  assert.match(html, /View investigation/); assert.match(html, /href="\/dashboard\/gap-investigations\/saved"/); assert.ok(!html.includes("Investigate this gap")); assert.equal(calls, 0);
+  assert.match(html, /View completed investigation/); assert.match(html, /href="\/dashboard\/gap-investigations\/saved"/); assert.ok(!html.includes("Investigate this gap")); assert.equal(calls, 0);
 });
 test("saved controls link directly, expose abandoned history and perform no requests", () => {
   reset(); const rows = [db.gap_investigations[0], { ...db.gap_investigations[0], id: "abandoned", status: "abandoned" }];
   const html = renderToStaticMarkup(React.createElement(Button, { gapId: "gap", saved: investigationsForGap(rows, "gap") }));
-  assert.match(html, /View investigation/); assert.match(html, /abandoned/); assert.match(html, /Investigation history \(2\)/); assert.ok(!html.includes("<button"));
+  assert.match(html, /View completed investigation/); assert.match(html, /abandoned/); assert.match(html, /Investigation history \(2\)/); assert.ok(!html.includes("<button"));
   rows[0].status = "active"; assert.match(renderToStaticMarkup(React.createElement(Button, { gapId: "gap", saved: investigationsForGap(rows, "gap") })), /Continue investigation/);
 });
 test("rapid clicks before rerender send one POST and navigate once", async () => {
@@ -188,7 +191,7 @@ test("abandoned-only history stays visible without being resumed", () => {
 test("analysis with no history offers investigation creation", async () => {
   reset(); db.gap_investigations = [];
   const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
-  assert.match(html, /Investigate this gap/); assert.ok(!html.includes("View investigation")); assert.equal(calls, 0); assert.equal(writes, 0);
+  assert.match(html, /Investigate this gap/); assert.ok(!html.includes("View completed investigation")); assert.equal(calls, 0); assert.equal(writes, 0);
 });
 for (const kind of ["foreign-gap", "foreign-analysis", "other-profile-analysis"]) test(`creation rejects ${kind} before reuse or AI`, async () => {
   reset(); if (kind === "foreign-gap") db.gaps[0].user_id = "foreign";
@@ -316,4 +319,90 @@ test("restoration does not scroll away from history; explicit successful submiss
     assert.equal(requestCount, 1); assert.equal(scrolled, 1);
     const html = renderToStaticMarkup(updated); assert.match(html, /First saved answer/); assert.match(html, /Next explicit question/);
   } finally { globalThis.fetch = original; }
+});
+
+const activeSessionId = "11111111-1111-4111-8111-111111111111";
+const completedSessionId = "22222222-2222-4222-8222-222222222222";
+function multipleSessions() {
+  savedConversation("concluded");
+  db.gap_investigations[0].id = completedSessionId;
+  db.gap_investigations[0].created_at = "2026-10-27T14:30:00Z";
+  db.gap_investigation_turns.forEach(turn => { turn.investigation_id = completedSessionId; });
+  db.gap_investigations.push({ ...db.gap_investigations[0], id: activeSessionId, status: "active", turn_count: 0, created_at: "2026-10-28T16:00:00Z" });
+  db.gap_investigation_turns.push({ ...db.gap_investigation_turns[0], id: "opening", investigation_id: activeSessionId, role: "assistant", turn_index: 0, content: "Active first question?" });
+}
+test("zero-answer active session stays primary with explicit progress and a prominent completed link", async () => {
+  multipleSessions(); const before = JSON.stringify(db);
+  const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
+  const visible = html.slice(0, html.indexOf("<details"));
+  assert.match(visible, /Not started — 0 answers saved/); assert.match(visible, /Continue investigation/); assert.match(visible, /View completed investigation/);
+  assert.match(visible, new RegExp(`href="/dashboard/gap-investigations/${activeSessionId}"`));
+  assert.match(visible, new RegExp(`href="/dashboard/gap-investigations/${completedSessionId}"`));
+  assert.ok(visible.indexOf(activeSessionId) < visible.indexOf(completedSessionId));
+  assert.match(visible, /2 answers saved/); assert.match(visible, /Session 11111111/); assert.match(visible, /Session 22222222/);
+  assert.equal(calls, 0); assert.equal(writes, 0); assert.equal(JSON.stringify(db), before);
+});
+test("active progress counts persisted user rows even when turn_count lags", async () => {
+  savedConversation(); db.gap_investigations[0].turn_count = 0;
+  const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
+  assert.match(html, /2 answers saved/); assert.ok(!html.includes("Not started"));
+  assert.equal(answerReads.length, 1); assert.equal(answerReads[0].columns, "id,investigation_id");
+  assert.equal(answerReads[0].role, "user"); assert.equal(answerReads[0].userId, "owner");
+});
+test("latest concluded session gets the prominent link and all older sessions stay in sorted history", async () => {
+  multipleSessions(); const old = { ...db.gap_investigations[0], id: "older-completed", created_at: "2026-10-20T10:00:00Z" };
+  const abandoned = { ...old, id: "abandoned-session", status: "abandoned", created_at: "2026-10-21T10:00:00Z" };
+  const tied = { ...db.gap_investigations[0], id: "ffffffff-ffff-ffff-ffff-ffffffffffff" };
+  db.gap_investigations.push(old, abandoned, tied);
+  const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
+  const historyStart = html.indexOf("<details"), visible = html.slice(0, historyStart), history = html.slice(historyStart);
+  assert.ok(visible.includes(`/dashboard/gap-investigations/${tied.id}`)); assert.ok(!visible.includes(`/dashboard/gap-investigations/${completedSessionId}`));
+  assert.match(history, /Investigation history \(5\)/);
+  for (const id of [activeSessionId, tied.id, completedSessionId, abandoned.id, old.id]) assert.ok(history.includes(`/dashboard/gap-investigations/${id}`));
+  assert.ok(history.indexOf(tied.id) < history.indexOf(completedSessionId)); assert.ok(history.indexOf(abandoned.id) < history.indexOf(old.id));
+  assert.match(history, /Created Oct 27, 2026, 2:30 PM UTC/); assert.match(history, /Concluded/); assert.match(history, /Abandoned/); assert.match(history, /0 answers saved/);
+});
+test("concluded-only navigation shows one prominent completed link without changing selection", async () => {
+  savedConversation("concluded"); const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
+  const visible = html.slice(0, html.indexOf("<details")); assert.equal(visible.split("View completed investigation").length - 1, 1);
+  assert.match(visible, /2 answers saved/); assert.ok(!visible.includes("Continue investigation")); assert.ok(!visible.includes("Not started"));
+});
+test("batched progress reads count only allowed IDs and owned user answers, never assistant messages", async () => {
+  multipleSessions(); db.gap_investigation_turns.push({ ...db.gap_investigation_turns[0], id: "foreign-user-answer", user_id: "foreign", role: "user" }, { ...db.gap_investigation_turns[0], id: "other-session-answer", investigation_id: "other-session", role: "user" });
+  const rows = await readSavedInvestigations(client, "owner", "profile", "analysis");
+  const counts = await readSavedAnswerCounts(client, "owner", rows.map(row => row.id));
+  assert.equal(counts.get(completedSessionId), 2); assert.equal(counts.get(activeSessionId), 0); assert.equal(counts.has("other-session"), false);
+  assert.equal(answerReads.length, 1); assert.deepEqual(answerReads[0].ids, [activeSessionId, completedSessionId]);
+  assert.ok(!answerReads[0].columns.includes("content"));
+});
+test("progress queries batch investigations and paginate answer rows without N+1", async () => {
+  reset(); const ids = Array.from({ length: 102 }, (_, i) => `session-${i}`);
+  db.gap_investigation_turns = ids.flatMap((id, i) => Array.from({ length: i === 0 ? 7 : 5 }, (_, j) => ({ id: `${id}-answer-${j}`, investigation_id: id, user_id: "owner", role: "user" })));
+  const counts = await readSavedAnswerCounts(client, "owner", ids);
+  assert.equal(counts.get("session-0"), 7); assert.equal(counts.get("session-101"), 5);
+  assert.equal(answerReads.length, 3); assert.deepEqual(answerReads.map(row => row.ids.length), [100, 100, 2]);
+  assert.deepEqual(answerReads.map(row => row.offset), [0, 500, 0]);
+  const previous = answerReads.length; assert.equal((await readSavedAnswerCounts(client, "owner", [])).size, 0); assert.equal(answerReads.length, previous);
+});
+test("foreign profile/user/analysis histories and their progress never appear on the analysis page", async () => {
+  multipleSessions();
+  for (const field of ["user_id", "career_profile_id", "seed_analysis_id"]) db.gap_investigations.push({ ...db.gap_investigations[0], id: `foreign-${field}`, [field]: "foreign" });
+  const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
+  for (const field of ["user_id", "career_profile_id", "seed_analysis_id"]) { assert.ok(!html.includes(`foreign-${field}`)); assert.ok(!answerReads[0].ids.includes(`foreign-${field}`)); }
+  assert.equal(calls, 0); assert.equal(writes, 0);
+});
+test("detail identity reports the exact session and persisted answer count without changing the transcript", async () => {
+  multipleSessions();
+  const active = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: activeSessionId }) }));
+  assert.match(active, /Session 11111111/); assert.match(active, /Active/); assert.match(active, /Created Oct 28, 2026, 4:00 PM UTC/); assert.match(active, /Not started — 0 answers saved/);
+  assert.match(active, /Active first question/); assert.ok(!active.includes("First saved answer")); assert.match(active, /Type your answer/);
+  const concluded = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: completedSessionId }) }));
+  assert.match(concluded, /Session 22222222/); assert.match(concluded, /2 answers saved/); assert.match(concluded, /First saved answer/); assert.ok(!concluded.includes("Type your answer"));
+  assert.equal(calls, 0); assert.equal(writes, 0);
+});
+test("unavailable counts are not labeled zero and do not block saved navigation", async () => {
+  multipleSessions(); failure = "gap_investigation_turns";
+  const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
+  assert.match(html, /Saved answer counts are unavailable/); assert.match(html, /Answer count unavailable/); assert.match(html, /Continue investigation/); assert.match(html, /View completed investigation/);
+  assert.ok(!html.includes("Not started")); assert.ok(!html.includes("0 answers saved")); assert.equal(calls, 0); assert.equal(writes, 0);
 });

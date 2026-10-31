@@ -60,6 +60,7 @@ export default function InvestigationClient({ initialBundle }: Props) {
 
   const { investigation, turns, evidence } = bundle;
   const concluded = investigation.status === "concluded";
+  const active = investigation.status === "active";
 
   useEffect(() => {
     // Scroll the newest turn into view whenever the transcript grows.
@@ -68,7 +69,7 @@ export default function InvestigationClient({ initialBundle }: Props) {
 
   async function submitTurn() {
     const trimmed = content.trim();
-    if (!trimmed || sending || concluded) return;
+    if (!trimmed || sending || !active) return;
     setSending(true);
     setError(null);
     try {
@@ -225,7 +226,8 @@ export default function InvestigationClient({ initialBundle }: Props) {
           <div ref={bottomRef} />
         </div>
 
-        {!concluded && (
+        {!active && !concluded && <p className="text-[13px]">This investigation is abandoned. Its saved conversation remains available.</p>}
+        {active && (
           <div className="space-y-2">
             <textarea
               value={content}

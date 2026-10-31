@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import PlanRecommendationSection from "./plan-recommendation";
 import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
 import SessionIdentity from "../session-identity";
@@ -217,11 +218,38 @@ export default function InvestigationClient({ initialBundle }: Props) {
           </Card>
         )}
 
-        <section className="space-y-3" aria-label="Investigation conversation">
+        {concluded && (
+          <PlanRecommendationSection
+            key={JSON.stringify([
+              investigation.id,
+              investigation.updated_at,
+              evidence.map((row) => [
+                row.id,
+                row.user_status,
+                row.user_edit,
+                row.updated_at,
+              ]),
+            ])}
+            investigationId={investigation.id}
+          />
+        )}
+
+        <section
+          className="space-y-3"
+          aria-label="Investigation conversation"
+        >
           <div>
-            <h2 className="text-[14px] font-semibold">Saved conversation</h2>
+            <h2 className="text-[14px] font-semibold">
+              Saved conversation
+            </h2>
             <p className="text-[12px] text-[color:var(--color-text-muted)]">
-              {savedAnswers === 0 ? canAnswer ? "No answers saved yet. Start with the question below." : "No user responses were saved." : `${savedAnswers} saved ${savedAnswers === 1 ? "answer" : "answers"} · Questions and responses are shown in order.`}
+              {savedAnswers === 0
+                ? canAnswer
+                  ? "No answers saved yet. Start with the question below."
+                  : "No user responses were saved."
+                : `${savedAnswers} saved ${
+                    savedAnswers === 1 ? "answer" : "answers"
+                  } · Questions and responses are shown in order.`}
             </p>
           </div>
           {turns.map((t) => (

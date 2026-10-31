@@ -12,7 +12,9 @@
   "eval:rescore": "tsx scripts/eval/rescore.ts",
   "test:investigation-navigation": "node --import tsx --test scripts/tests/investigation-navigation.test.ts",
   "test:action-plans": "node --import tsx --test scripts/tests/action-plans.test.ts",
-  "test:analysis-metadata": "node --import tsx --test scripts/tests/analysis-metadata.test.ts"
+  "test:analysis-metadata": "node --import tsx --test scripts/tests/analysis-metadata.test.ts",
+  "test:plan-recommendations": "node --import tsx --test scripts/tests/plan-recommendations.test.ts",
+  "eval:plan-recommendations": "node --import tsx scripts/eval/plan-recommendations/run.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

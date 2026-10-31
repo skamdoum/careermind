@@ -6,6 +6,7 @@ import PageHeader from "@/app/components/ui/PageHeader";
 import { loadInvestigationBundle } from "@/lib/db/gap-investigations";
 import type { InvestigationBundle } from "@/lib/db/gap-investigations";
 import InvestigationClient from "./investigation-client";
+import SessionIdentity from "../session-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,7 @@ export default async function GapInvestigationPage({ params }: PageProps) {
         <InvestigationClient key={investigation.id} initialBundle={bundle} />
       ) : (
         <div role="alert" className="space-y-2 text-[13px]">
+          <SessionIdentity investigation={{ ...investigation, saved_answer_count: bundle.turns.filter(turn => turn.role === "user").length }} />
           <p>{INITIALIZATION_ERROR}</p>
           <a className="underline" href={`/dashboard/gap-investigations/${id}`}>Reload investigation</a>
         </div>

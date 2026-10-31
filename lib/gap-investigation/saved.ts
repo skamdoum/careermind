@@ -5,6 +5,8 @@ export type SavedInvestigation = {
   seed_gap_id: string | null;
   status: "active" | "concluded" | "abandoned";
   created_at: string;
+  // Display metadata, populated separately so creation/reuse reads are unchanged.
+  saved_answer_count?: number;
 };
 
 // Discovery must not create a profile or silently switch to a default profile.
@@ -33,6 +35,27 @@ export async function readSavedInvestigations(client: SupabaseClient, userId: st
     rows.push(...(data ?? []));
     if ((data ?? []).length < 100) return rows;
   }
+}
+
+// IDs must come from readSavedInvestigations, which verifies the parent scope.
+// Read only user-turn IDs/relationships, never transcript content. Batch IN lists
+// and paginate results: one request per investigation would turn history into N+1.
+export async function readSavedAnswerCounts(client: SupabaseClient, userId: string, investigationIds: string[]) {
+  const counts = new Map(investigationIds.map(id => [id, 0]));
+  for (let start = 0; start < investigationIds.length; start += 100) {
+    const ids = investigationIds.slice(start, start + 100);
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await client.from("gap_investigation_turns").select("id,investigation_id")
+        .eq("user_id", userId).eq("role", "user").in("investigation_id", ids)
+        .order("id", { ascending: true }).range(offset, offset + 499);
+      if (error) throw new Error("Saved answer counts could not be loaded");
+      for (const row of data ?? []) {
+        if (counts.has(row.investigation_id)) counts.set(row.investigation_id, counts.get(row.investigation_id)! + 1);
+      }
+      if ((data ?? []).length < 500) break;
+    }
+  }
+  return counts;
 }
 
 export function investigationsForGap(rows: SavedInvestigation[], gapId: string) {

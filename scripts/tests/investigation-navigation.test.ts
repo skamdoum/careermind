@@ -35,6 +35,20 @@ const { default: AnalysisPage } = require("../../app/dashboard/[id]/page.tsx");
 // AnalysisPage has already cached this module with real hooks. Reload only it.
 delete require.cache[require.resolve("../../app/dashboard/[id]/investigate-gap-button.tsx")];
 const { default: Button } = require("../../app/dashboard/[id]/investigate-gap-button.tsx");
+let effects: Array<() => void> = [];
+let hookValues: any[] = [], hookIndex = 0;
+(Module as any)._load = function(name: string, ...args: unknown[]) {
+  if (name === "react") return { ...React,
+    useState: (initial: unknown) => { const index = hookIndex++; if (!(index in hookValues)) hookValues[index] = initial; return [hookValues[index], (value: any) => { hookValues[index] = typeof value === "function" ? value(hookValues[index]) : value; }]; },
+    useRef: (initial: unknown) => { const index = hookIndex++; hookValues[index] ??= { current: initial }; return hookValues[index]; },
+    useEffect: (effect: () => void) => { effects.push(effect); },
+  };
+  return load.call(this, name, ...args);
+};
+// Page keeps its real-hook component reference; only this test instance uses
+// deterministic hook boundaries to exercise scroll effects and submission.
+delete require.cache[require.resolve("../../app/dashboard/gap-investigations/[id]/investigation-client.tsx")];
+const { default: HookClient } = require("../../app/dashboard/gap-investigations/[id]/investigation-client.tsx");
 (Module as any)._load = load;
 
 function reset() {
@@ -202,4 +216,104 @@ test("concluded and abandoned detail pages render saved content without starting
     else assert.match(html, /This investigation is abandoned/);
     assert.equal(calls, 0); assert.equal(writes, 0);
   }
+});
+
+function savedConversation(status = "active") {
+  reset(); db.gap_investigations[0].status = status; db.gap_investigations[0].turn_count = 2;
+  const contents = ["First saved question?", "First saved answer.", "Second saved question?", "Second saved answer.", "Current saved question?"];
+  db.gap_investigation_turns = contents.map((content, index) => ({ id: `turn-${index}`, investigation_id: "saved", user_id: "owner", role: index % 2 ? "user" : "assistant", turn_index: index, created_at: `2026-10-28T12:00:0${index}Z`, content })).reverse();
+  return contents;
+}
+test("active page restores all persisted questions and answers in order with one current question", async () => {
+  const contents = savedConversation(), before = JSON.stringify(db);
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  let previous = -1;
+  for (const content of contents) { const index = html.indexOf(content); assert.ok(index > previous); previous = index; assert.equal(html.split(content).length - 1, 1); }
+  assert.match(html, /2 saved answers/); assert.equal(html.split("CareerMind · Current question").length - 1, 1);
+  assert.ok(html.indexOf("Current saved question?") < html.indexOf("Type your answer"));
+  assert.match(html, /You · Saved response/); assert.equal(JSON.stringify(db), before); assert.equal(calls, 0); assert.equal(writes, 0);
+});
+test("page reload and GET restore the identical full saved transcript", async () => {
+  savedConversation(); const first = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  const second = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.equal(first, second); const body = await (await get()).json(); assert.equal(body.data.turns.length, 5);
+  assert.deepEqual(body.data.turns.map((t: any) => t.turn_index), [0, 1, 2, 3, 4]); assert.equal(calls, 0); assert.equal(writes, 0);
+});
+for (const status of ["concluded", "abandoned"]) test(`${status} page displays the whole multi-turn transcript read-only`, async () => {
+  const contents = savedConversation(status);
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  for (const content of contents) assert.ok(html.includes(content));
+  assert.ok(!html.includes("Type your answer")); assert.ok(!html.includes("Current question")); assert.match(html, /Corrected evidence/);
+  if (status === "concluded") assert.match(html, /Saved conclusion/);
+  assert.equal(calls, 0); assert.equal(writes, 0);
+});
+test("transcripts never include turns from another investigation or user", async () => {
+  savedConversation(); db.gap_investigation_turns.push({ ...db.gap_investigation_turns[0], id: "foreign", investigation_id: "different", content: "OTHER CONVERSATION" }, { ...db.gap_investigation_turns[0], id: "foreign-user", user_id: "other", content: "OTHER USER" });
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.ok(!html.includes("OTHER CONVERSATION")); assert.ok(!html.includes("OTHER USER")); assert.match(html, /First saved answer/);
+});
+test("transcript retrieval failure shows recoverable error and preserves all persisted rows", async () => {
+  savedConversation(); const before = JSON.stringify(db); failure = "gap_investigation_turns";
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.match(html, /Conversation could not be loaded/); assert.match(html, /Reload investigation/); assert.ok(!html.includes("Type your answer"));
+  assert.equal((await get()).status, 500); assert.equal(JSON.stringify(db), before); assert.equal(calls, 0); assert.equal(writes, 0);
+});
+test("reader loads every turn page and uses stable index/created/id ordering", async () => {
+  savedConversation(); db.gap_investigations[0].turn_count = 102;
+  db.gap_investigation_turns = Array.from({ length: 205 }, (_, index) => ({ ...db.gap_investigation_turns[0], id: `turn-${index}`, turn_index: index, role: index % 2 ? "user" : "assistant", content: `Persisted turn ${index}.` })).reverse();
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.match(html, /Persisted turn 0\./); assert.match(html, /Persisted turn 204\./);
+  assert.equal((await (await get()).json()).data.turns.length, 205);
+  // Equal legacy indexes still render deterministically; no rows are discarded.
+  db.gap_investigation_turns[0].turn_index = 0;
+  assert.deepEqual((await (await get()).json()).data.turns.slice(0, 2).map((t: any) => t.id), ["turn-0", "turn-204"]);
+});
+test("a missing persisted answer is not silently presented as a fresh investigation", async () => {
+  savedConversation(); db.gap_investigation_turns = db.gap_investigation_turns.filter(t => t.role === "assistant");
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.match(html, /Conversation could not be loaded/); assert.ok(!html.includes("No answers saved yet")); assert.equal(calls, 0);
+});
+test("a saved answer without the next question preserves history but disables further submission", async () => {
+  savedConversation(); db.gap_investigation_turns = db.gap_investigation_turns.filter(t => t.turn_index !== 4);
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.match(html, /Second saved answer/); assert.match(html, /next question is unavailable/); assert.match(html, /Reload investigation/);
+  assert.ok(!html.includes("Type your answer")); assert.equal(calls, 0); assert.equal(writes, 0);
+});
+test("new investigation is labeled distinctly from restored multi-answer history", async () => {
+  reset(); db.gap_investigations[0].status = "active";
+  const html = renderToStaticMarkup(await DetailPage({ params: Promise.resolve({ id: "saved" }) }));
+  assert.match(html, /No answers saved yet/); assert.match(html, /Current question/); assert.match(html, /Type your answer/);
+});
+test("detail page keys client state by exact investigation ID", async () => {
+  savedConversation(); const first = await DetailPage({ params: Promise.resolve({ id: "saved" }) });
+  assert.equal(first.props.children.at(-1).key, "saved");
+  db.gap_investigations.push({ ...db.gap_investigations[0], id: "other", turn_count: 0 });
+  db.gap_investigation_turns.push({ ...db.gap_investigation_turns[0], id: "other-turn", turn_index: 0, investigation_id: "other", content: "Other saved question" });
+  const next = await DetailPage({ params: Promise.resolve({ id: "other" }) }); assert.equal(next.props.children.at(-1).key, "other");
+  const html = renderToStaticMarkup(next); assert.match(html, /Other saved question/); assert.ok(!html.includes("First saved answer"));
+});
+test("restoration does not scroll away from history; explicit successful submission still scrolls", async () => {
+  savedConversation(); const bundle = (await (await get()).json()).data;
+  hookValues = []; hookIndex = 0; effects = []; let scrolled = 0;
+  HookClient({ initialBundle: bundle }); hookValues[4].current = { scrollIntoView: () => { scrolled++; } };
+  effects.forEach(effect => effect()); assert.equal(scrolled, 0);
+  hookValues[1] = "A new explicit answer"; hookIndex = 0; effects = [];
+  const tree = HookClient({ initialBundle: bundle });
+  function findButton(node: any): any {
+    if (!node) return null;
+    if (Array.isArray(node)) return node.map(findButton).find(Boolean);
+    if (node.type === "button" && node.props.onClick) return node;
+    return findButton(node.props?.children);
+  }
+  const original = globalThis.fetch; let requestCount = 0;
+  globalThis.fetch = (async (_url: string, options: RequestInit) => {
+    requestCount++; assert.equal(JSON.parse(options.body as string).content, "A new explicit answer");
+    return new Response(JSON.stringify({ success: true, data: { ...bundle, turns: [...bundle.turns, { ...bundle.turns[0], id: "new-answer", role: "user", turn_index: 5, content: "A new explicit answer" }, { ...bundle.turns[0], id: "new-question", role: "assistant", turn_index: 6, content: "Next explicit question?" }] } }));
+  }) as typeof fetch;
+  try {
+    await findButton(tree).props.onClick(); hookIndex = 0; effects = [];
+    const updated = HookClient({ initialBundle: bundle }); effects.forEach(effect => effect());
+    assert.equal(requestCount, 1); assert.equal(scrolled, 1);
+    const html = renderToStaticMarkup(updated); assert.match(html, /First saved answer/); assert.match(html, /Next explicit question/);
+  } finally { globalThis.fetch = original; }
 });

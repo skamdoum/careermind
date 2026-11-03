@@ -1,3 +1,4 @@
+import { assertOwnedResumePath, ResumeAccessError } from "@/lib/resumes/authorization";
 import { NextResponse } from "next/server";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +31,8 @@ export async function POST(req: Request) {
       );
     }
 
+    assertOwnedResumePath(filePath, user.id);
+
     const { data, error } = await supabase
       .from("resumes")
       .insert({
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
+    if (error instanceof ResumeAccessError) return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     return NextResponse.json(
       { success: false, error: error?.message || "Failed to save resume metadata" },
       { status: 500 }

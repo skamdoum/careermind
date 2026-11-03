@@ -12,6 +12,7 @@ let navigations: string[] = [];
 let answerReads: Array<{ columns: string; userId: unknown; role: unknown; ids: unknown[]; offset: number }> = [];
 const load = (Module as any)._load;
 (Module as any)._load = function(name: string, ...args: unknown[]) {
+  if (name === "server-only") return {};
   if (/lib\/supabase\/server(?:\.ts)?$/.test(name)) return { createClient: async () => client };
   if (/lib\/supabase\/admin(?:\.ts)?$/.test(name)) return { supabaseAdmin: { from: (table: string) => client.from(table) } };
   if (/gap-investigation\/agent(?:\.ts)?$/.test(name)) return {

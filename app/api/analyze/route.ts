@@ -1,3 +1,5 @@
+import { downloadOwnedResume } from "@/lib/resumes/download.server";
+import { ResumeAccessError } from "@/lib/resumes/authorization";
 import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
@@ -57,8 +59,14 @@ export async function POST(req: Request) {
       const trimmed = v.trim();
       return trimmed ? trimmed : null;
     };
-    const clientResumeId: string | null =
-      pickResumeId(body?.resume_id) ?? pickResumeId(latestResume?.id);
+    const explicitId = pickResumeId(body?.resume_id);
+    const legacyId = pickResumeId(latestResume?.id);
+    if ((body?.resume_id !== undefined && !explicitId) ||
+      (latestResume != null && !legacyId) ||
+      (explicitId && legacyId && explicitId !== legacyId)) {
+      throw new ResumeAccessError(400, "Invalid or conflicting resume reference");
+    }
+    const clientResumeId = explicitId ?? legacyId;
 
     if (
       (career_goal_id && !job_description_id) ||
@@ -239,20 +247,10 @@ export async function POST(req: Request) {
     let debugOpenAiFileId: string | null = null;
 
     if (resolvedResume) {
-      const { data: fileData, error: downloadError } = await supabaseAdmin.storage
-        .from("resumes")
-        .download(resolvedResume.file_path);
-
-      if (downloadError) {
-        throw downloadError;
-      }
-
-      const bytes = Buffer.from(await fileData.arrayBuffer());
-
+      const { resume, file } = await downloadOwnedResume(supabase, user.id, activeProfileId, resolvedResume.id);
+      resolvedResume = resume as ResumeRow;
       const openaiFile = await openai.files.create({
-        file: new File([bytes], resolvedResume.file_name || "resume.pdf", {
-          type: resolvedResume.mime_type || "application/octet-stream",
-        }),
+        file,
         purpose: "user_data",
       });
 
@@ -1087,6 +1085,7 @@ const signalRows = parsed.signals.map((s: any) => ({
       },
     });
   } catch (error: any) {
+    if (error instanceof ResumeAccessError) return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     console.error("Analyze API error:", error);
 
     return NextResponse.json(

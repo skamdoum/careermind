@@ -26,6 +26,7 @@ const load = (Module as any)._load;
   if (name === "next/navigation") return { useRouter: () => ({ push: (url: string) => navigations.push(url) }), redirect: (url: string) => { throw new Error(`redirect:${url}`); } };
   return load.call(this, name, ...args);
 };
+const { RESUME_SOURCE_KEY, textSource } = require("../../lib/resumes/source.server.ts");
 const { POST } = require("../../app/api/gap-investigations/route.ts");
 const { GET } = require("../../app/api/gap-investigations/[id]/route.ts");
 const { default: DetailPage } = require("../../app/dashboard/gap-investigations/[id]/page.tsx");
@@ -61,7 +62,7 @@ function reset() {
   db = {
     profiles: [{ id: "owner", active_career_profile_id: "profile" }],
     career_profiles: [{ id: "profile", user_id: "owner" }],
-    analyses: [{ id: "analysis", user_id: "owner", career_profile_id: "profile", raw_json: { gaps: [{ gap_title: "Ownership", severity: "High" }] } }],
+    analyses: [{ id: "analysis", user_id: "owner", career_profile_id: "profile", raw_json: { [RESUME_SOURCE_KEY]: textSource("Synthetic original resume"), gaps: [{ gap_title: "Ownership", severity: "High" }] } }],
     gaps: [{ id: "gap", user_id: "owner", analysis_id: "analysis", priority: 1, gap_title: "Ownership" }],
     gap_investigations: [{ id: "saved", user_id: "owner", career_profile_id: "profile", seed_gap_id: "gap", seed_analysis_id: "analysis", status: "concluded", created_at: "2026-10-28", context_snapshot: { gap: { gap_title: "Ownership" } }, conclusion: "capability_gap", conclusion_summary: "Saved conclusion" }],
     gap_investigation_turns: [{ id: "turn", investigation_id: "saved", user_id: "owner", role: "assistant", turn_index: 0, content: "Saved first question" }],
@@ -409,4 +410,16 @@ test("unavailable counts are not labeled zero and do not block saved navigation"
   const html = renderToStaticMarkup(await AnalysisPage({ params: Promise.resolve({ id: "analysis" }) }));
   assert.match(html, /Saved answer counts are unavailable/); assert.match(html, /Answer count unavailable/); assert.match(html, /Continue investigation/); assert.match(html, /View completed investigation/);
   assert.ok(!html.includes("Not started")); assert.ok(!html.includes("0 answers saved")); assert.equal(calls, 0); assert.equal(writes, 0);
+});
+
+test("saved investigation GET and server-to-client props omit private frozen source",async()=>{
+  reset();db.gap_investigations[0].context_snapshot.resume={id:null,file_name:null,source:textSource("PRIVATE SYNTHETIC ORIGINAL")};
+  const before=JSON.stringify(db);const r=await get();assert.equal(r.status,200);
+  assert.equal(JSON.stringify(await r.json()).includes("PRIVATE SYNTHETIC ORIGINAL"),false);
+  const tree=await DetailPage({params:Promise.resolve({id:"saved"})});
+  const clientBundles: any[]=[];
+  const visit=(node:any)=>{if(Array.isArray(node)){node.forEach(visit);return;}if(node?.props){if(node.props.initialBundle)clientBundles.push(node.props.initialBundle);visit(node.props.children);}};
+  visit(tree);assert.equal(clientBundles.length,1);
+  assert.equal(JSON.stringify(clientBundles).includes("PRIVATE SYNTHETIC ORIGINAL"),false);
+  assert.equal(JSON.stringify(db),before);assert.equal(calls,0);assert.equal(writes,0);
 });

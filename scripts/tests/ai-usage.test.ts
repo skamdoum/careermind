@@ -133,6 +133,8 @@ test('analysis finalization is atomic and its replay does not insert again', () 
 /* eslint-disable @typescript-eslint/no-explicit-any -- SDK network fixtures only. */
 import Module, { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+let providerInputs: any[] = [];
+let storageContents = "Synthetic fixture";
 let providerCalls = 0, uploads = 0, downloads = 0, providerFailure = false;
 let fixtureUser: any = { id: A, is_anonymous: false };
 const meta: any = { id: R, user_id: A, career_profile_id: P, file_path: `${A}/123.txt`, file_name: 'Synthetic.txt', mime_type: 'text/plain' };
@@ -143,7 +145,7 @@ function fixtureQuery(table: string) {
     const filters: Array<(row: any) => boolean> = [];
     let range = [0, Infinity];
     const rows = () => (localRecords && ["analyses", "gaps", "gap_investigations", "gap_investigation_turns", "gap_investigation_evidence"].includes(table) ? JSON.parse(sql(`select coalesce(jsonb_agg(t),'[]'::jsonb)from public.${table} t`)) : fixtureRows[table] ?? []).filter((row: any) => filters.every(f => f(row))).slice(range[0], range[1] + 1);
-    const q: any = { select: () => q, eq: (k: string, v: unknown) => { filters.push(row => row[k] === v); return q; }, in: (k: string, list: unknown[]) => { filters.push(row => list.includes(row[k])); return q; }, order: () => q, range: (a: number, b: number) => { range = [a, b]; return q; }, limit: (n: number) => { range = [0, n - 1]; return q; }, maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }), then: (yes: any, no: any) => Promise.resolve({ data: rows(), error: null, count: rows().length }).then(yes, no) };
+    const q: any = { insert: (row: any) => { fixtureRows[table] ??= []; fixtureRows[table].push(row); return q; }, select: () => q, eq: (k: string, v: unknown) => { filters.push(row => row[k] === v); return q; }, in: (k: string, list: unknown[]) => { filters.push(row => list.includes(row[k])); return q; }, order: () => q, range: (a: number, b: number) => { range = [a, b]; return q; }, limit: (n: number) => { range = [0, n - 1]; return q; }, maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }), then: (yes: any, no: any) => Promise.resolve({ data: rows(), error: null, count: rows().length }).then(yes, no) };
     return q;
 }
 const fixtureClient = { auth: { getUser: async () => ({ data: { user: fixtureUser }, error: null }) }, from: fixtureQuery };
@@ -165,11 +167,12 @@ const originalLoad = (Module as any)._load;
     if (/lib\/supabase\/server(?:\.ts)?$/.test(name))
         return { createClient: async () => fixtureClient };
     if (/lib\/supabase\/admin(?:\.ts)?$/.test(name))
-        return { supabaseAdmin: { from: fixtureQuery, storage: { from: () => ({ download: async () => { downloads++; return { data: new Blob(['Synthetic fixture']), error: null }; } }) } } };
+        return { supabaseAdmin: { from: fixtureQuery, storage: { from: () => ({ download: async () => { downloads++; return { data: new Blob([storageContents]), error: null }; } }) } } };
     if (name === 'openai')
         return class {
             files = { create: async () => { uploads++; return { id: 'file-fixture' }; } };
-            responses = { create: async () => {
+            responses = { create: async (input: any) => {
+                    providerInputs.push(input);
                     providerCalls++;
                     if (providerFailure)
                         throw Error('Synthetic provider timeout');
@@ -178,6 +181,7 @@ const originalLoad = (Module as any)._load;
         };
     return originalLoad.call(this, name, ...rest);
 };
+const { RESUME_SOURCE_KEY, textSource } = require("../../lib/resumes/source.server.ts");
 const { POST: compare } = require('../../app/api/compare/route.ts');
 const { GET: insightsGET, HEAD: insightsHEAD } = require('../../app/api/insights/narrative/route.ts');
 const { GET: strategyGET, HEAD: strategyHEAD } = require('../../app/api/strategy/narrative/route.ts');
@@ -188,7 +192,7 @@ const { POST: recommend } = require('../../app/api/gap-investigations/[id]/actio
 const { withAIUsage, aiResponse, aiFile, AIUsageError } = require('../../lib/ai-usage/guard.ts');
 (Module as any)._load = originalLoad;
 const compareRequest = (jobs = 1, key?: string) => new Request('http://localhost/api/compare', { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) }, body: JSON.stringify({ resume_id: R, jobDescriptions: Array.from({ length: jobs }, (_, i) => 'Synthetic job ' + i) }) });
-function resetProvider() { localRecords = false; providerOutput = null; failPersistenceOnce = ""; providerCalls = 0; uploads = 0; downloads = 0; providerFailure = false; fixtureUser = { id: A, is_anonymous: false }; fixtureRows = { profiles: [{ id: A, active_career_profile_id: P }], career_profiles: [{ id: P, user_id: A }], resumes: [meta] }; }
+function resetProvider() { storageContents = "Synthetic fixture"; providerInputs = []; localRecords = false; providerOutput = null; failPersistenceOnce = ""; providerCalls = 0; uploads = 0; downloads = 0; providerFailure = false; fixtureUser = { id: A, is_anonymous: false }; fixtureRows = { profiles: [{ id: A, active_career_profile_id: P }], career_profiles: [{ id: P, user_id: A }], resumes: [meta] }; }
 test('real Compare handler returns 429/Retry-After and never downloads or invokes OpenAI after quota rejection', async () => {
     reset();
     resetProvider();
@@ -285,6 +289,8 @@ for (const route of ['analysis', 'kickoff', 'turn', 'recommendation', 'insights'
             r = await analyze(postBody({ resume_id: R, jobDescription: 'Synthetic JD' }));
         else if (route === 'kickoff') {
             fixtureRows.gap_investigations = [];
+            fixtureRows.analyses[0].resume_id = null;
+            fixtureRows.analyses[0].raw_json[RESUME_SOURCE_KEY] = textSource('Synthetic original text');
             r = await kickoff(postBody({ gap_id: GP }));
         }
         else if (route === 'turn')
@@ -309,6 +315,8 @@ test('real Analyze transaction preserves the successful response and never regen
     assert.equal(first.status, 200, JSON.stringify(await first.clone().json()));
     const result = await first.json();
     assert.deepEqual(result.data.result, providerOutput);
+    assert.equal(sql(`select raw_json->'${RESUME_SOURCE_KEY}'->>'kind' from public.analyses where id='${result.data.analysisId}'`),'stored');
+    assert.equal(JSON.stringify(result).includes(RESUME_SOURCE_KEY),false);
     assert.ok(result.data.analysisId && result.data.planId);
     assert.equal(sql(`select priority from public.gaps where analysis_id='${result.data.analysisId}'`), '1');
     assert.deepEqual(await (await analyze(request())).json(), result);
@@ -444,6 +452,71 @@ test('expired pre-provider claim with a persisted answer requires original-opera
     assert.equal(recovered.id, o.id);
     assert.ok(recovered.steps['persist:user_turn']);
     assert.equal(Number(sql("select used from public.ai_usage_buckets where category='gap'")), 1);
+});
+test('pasted Analyze real SQL persistence keeps source private and replay costs one quota unit', async()=>{
+    reset();resetProvider();
+    providerOutput={positioning_summary:'Synthetic',core_verdict:'Borderline',signals:[],gaps:[],plan:{next_best_action:'Synthetic',tasks:[]}};
+    const request=()=>postBody({resumeText:'Original synthetic pasted text',jobDescription:'Synthetic JD'});
+    const first=await analyze(request());assert.equal(first.status,200);const body=await first.json();
+    assert.equal(sql(`select raw_json->'${RESUME_SOURCE_KEY}'->>'text' from public.analyses where id='${body.data.analysisId}'`),'Original synthetic pasted text');
+    assert.deepEqual(body.data.result,providerOutput);assert.equal(JSON.stringify(body).includes('Original synthetic pasted text'),false);
+    assert.deepEqual(await(await analyze(request())).json(),body);
+    assert.equal(providerCalls,1);assert.equal(uploads+downloads,0);
+    assert.equal(sql("select used from public.ai_usage_buckets where category='analysis'"),'1');
+    assert.equal(sql("select reserved from public.ai_usage_buckets where category='budget'"),'0');
+});
+test('missing kickoff source rejects before real SQL quota claim or provider work', async()=>{
+    reset();routeFixtures();fixtureRows.gap_investigations=[];
+    const r=await kickoff(postBody({gap_id:GP}));assert.equal(r.status,409);
+    assert.equal(sql('select count(*) from public.ai_usage_operations'),'0');
+    assert.equal(sql('select count(*) from public.ai_usage_buckets'),'0');
+    assert.equal(providerCalls+uploads+downloads,0);
+});
+
+test('real text kickoff and follow-up freeze original source, sanitize responses, and replay without extra quota',async()=>{
+    reset();routeFixtures();localRecords=true;
+    const aid=randomUUID(),gid=randomUUID(),originalText='PRIVATE ORIGINAL SYNTHETIC RESUME';
+    const raw={signals:[],[RESUME_SOURCE_KEY]:textSource(originalText)};
+    sql(`insert into public.analyses(id,user_id,career_profile_id,analysis_type,status,raw_json)values('${aid}','${A}','${P}','initial_onboarding','completed',${quote(raw)});insert into public.gaps(id,analysis_id,user_id,gap_title,gap_description,priority)values('${gid}','${aid}','${A}','Synthetic scope','Synthetic',1);`);
+    providerOutput={action:'ask_question',next_question:'Synthetic question?',candidate_evidence:[]};
+    const first=await kickoff(postBody({gap_id:gid}));assert.equal(first.status,200,JSON.stringify(await first.clone().json()));
+    const firstBody=await first.json(),iid=firstBody.data.investigation_id;
+    assert.equal(sql(`select context_snapshot#>>'{resume,source,text}' from public.gap_investigations where id='${iid}'`),originalText);
+    assert.equal(providerCalls,1);assert.equal(downloads+uploads,0);
+    assert.deepEqual(await(await kickoff(postBody({gap_id:gid}))).json(),firstBody);assert.equal(providerCalls,1);
+    // Later analysis changes cannot replace the frozen investigation evidence.
+    sql(`update public.analyses set raw_json='{}' where id='${aid}'`);
+    const response=await turn(postBody({content:'Synthetic answer'}),{params:Promise.resolve({id:iid})});
+    assert.equal(response.status,200,JSON.stringify(await response.clone().json()));const body=await response.json();
+    assert.equal(JSON.stringify(body).includes(originalText),false);assert.equal(providerCalls,2);
+    for(const input of providerInputs){assert.equal(input.input[1].content.filter((p:any)=>p.text?.includes(originalText)).length,1);assert.equal(input.input[1].content.some((p:any)=>p.type==='input_file'),false);}
+    assert.equal(sql(`select count(*) from public.gap_investigation_turns where investigation_id='${iid}'`),'3');
+    assert.equal(sql("select used from public.ai_usage_buckets where category='gap'"),'2');
+    assert.equal(sql("select reserved from public.ai_usage_buckets where category='budget'"),'0');
+    assert.equal(sql(`select context_snapshot#>>'{resume,source,text}' from public.gap_investigations where id='${iid}'`),originalText);
+});
+for(const narrative of ['insights','strategy'])test(`${narrative} prompt never includes private analysis source`,async()=>{
+    reset();routeFixtures();fixtureRows.analyses[0].raw_json[RESUME_SOURCE_KEY]=textSource('PRIVATE RESUME NOT FOR NARRATIVES');
+    const response=await(narrative==='insights'?insightsGET:strategyGET)();assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
+    assert.equal(providerCalls,1);assert.equal(JSON.stringify(providerInputs).includes('PRIVATE RESUME NOT FOR NARRATIVES'),false);
+});
+for(const issue of ['inactive-profile','conflicting-frozen-source'])test(`follow-up rejects ${issue} before admission or saved answer`,async()=>{
+    reset();routeFixtures();
+    if(issue==='inactive-profile')fixtureRows.profiles[0].active_career_profile_id=B;
+    else fixtureRows.gap_investigations[0].context_snapshot.resume={id:R,source:textSource('Synthetic')};
+    const r=await turn(postBody({content:'Synthetic answer'}),{params:Promise.resolve({id:GI})});
+    assert.equal(r.status,issue==='inactive-profile'?404:409);assert.equal(sql('select count(*) from public.ai_usage_operations'),'0');assert.equal(providerCalls,0);
+    assert.equal(fixtureRows.gap_investigation_turns.length,1);
+});
+test('stored Analyze recovery never rebinds a saved provider result to changed bytes',async()=>{
+    reset();resetProvider();
+    providerOutput={positioning_summary:'Synthetic',core_verdict:'Borderline',signals:[],gaps:[],plan:{next_best_action:'Synthetic',tasks:[]}};
+    failPersistenceOnce='analysis';const request=()=>postBody({resume_id:R,jobDescription:'Synthetic recovery JD'});
+    assert.equal((await analyze(request())).status,503);assert.equal(providerCalls,1);
+    storageContents='Different bytes at the same path';
+    const retry=await analyze(request());assert.equal(retry.status,409);assert.equal(providerCalls,1);assert.equal(uploads,1);
+    assert.equal(sql("select used from public.ai_usage_buckets where category='analysis'"),'1');
+    assert.equal(sql("select steps#>>'{resumeSource,sha256}' from public.ai_usage_operations"),createHash('sha256').update('Synthetic fixture').digest('hex'));
 });
 test('operational rollback pauses AI and preserves uncertain holds, receipts and private permissions', () => {
     reset();

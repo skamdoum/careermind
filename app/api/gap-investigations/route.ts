@@ -1,3 +1,4 @@
+import { ResumeSourceError, analysisSource, verifyStoredSource, sourceError } from "@/lib/resumes/source.server";
 import { withAIUsage, usageCheckpoint, persistAIRecords, usageErrorResponse, readAIInput } from "@/lib/ai-usage/guard";
 import { downloadOwnedResume } from "@/lib/resumes/download.server";
 import { ResumeAccessError } from "@/lib/resumes/authorization";
@@ -104,8 +105,18 @@ export async function POST(req: Request) {
 
     const preexisting = investigationsForGap(await readSavedInvestigations(supabase,user.id,profileId,analysis.id),seedGap.id).primary;
     if(preexisting && await hasInitialAssistantTurn(supabase,user.id,preexisting.id)) return NextResponse.json({success:true,data:{investigation_id:preexisting.id}});
-    return await withAIUsage({userId:user.id,route:"kickoff",request:req,input:{gapId,analysisId:analysis.id,profileId}},async()=>{
-    // Reuse before storage downloads, uploads, inserts or agent work.
+    // Resolve provenance before quota admission or provider work. Never select
+    // another profile resume. Keep the verified bytes for upload (no second fetch).
+    const resumeSource = analysisSource(analysis.raw_json, analysis.resume_id ?? null);
+    const ownedFile = await (async () => {
+      if (resumeSource.kind !== "stored") return null;
+      try { return await downloadOwnedResume(supabase, user.id, profileId, resumeSource.resume_id); }
+      catch (error) { if (error instanceof ResumeAccessError) throw error; throw sourceError(); }
+    })();
+    if (ownedFile) await verifyStoredSource(resumeSource, ownedFile.file);
+    const resumeRow = ownedFile?.resume ?? null;
+    return await withAIUsage({userId:user.id,route:"kickoff",request:req,input:{gapId,analysisId:analysis.id,profileId,sourceKind:resumeSource.kind,sourceHash:resumeSource.sha256}},async()=>{
+    // Reuse before provider uploads, inserts or agent work; source preflight is above.
     // This read-before-insert check is NOT an atomic cross-instance claim.
     const alreadyCreated = await usageCheckpoint("originalSaved", async()=>readSavedInvestigations(supabase,user.id,profileId,analysis.id));
     const saved = alreadyCreated;
@@ -140,43 +151,6 @@ export async function POST(req: Request) {
       if (goal?.target_function && targetRole === "PM") {
         targetRole = goal.target_function;
       }
-    }
-
-    // Resolve the resume tied to this analysis. Preferred: the resume
-    // that was actually sent to the analyzer.
-    let resumeRow: {
-      id: string;
-      file_path: string;
-      file_name: string | null;
-      mime_type: string | null;
-    } | null = null;
-
-    if (analysis.resume_id) {
-      const { data: r, error: resumeError } = await supabase
-        .from("resumes")
-        .select("id, file_path, file_name, mime_type")
-        .eq("id", analysis.resume_id)
-        .eq("user_id", user.id)
-        .eq("career_profile_id", profileId)
-        .maybeSingle();
-      if (resumeError) throw new ResumeAccessError(503, "Could not load resume");
-      if (r) resumeRow = r;
-    }
-
-    // Fall back to the newest resume for this profile if the analysis
-    // pre-dated resume_id (older rows).
-    if (analysis.resume_id && !resumeRow) throw new ResumeAccessError(404, "Resume not found in the active career profile");
-    if (!analysis.resume_id) {
-      const { data: r, error: resumeError } = await supabase
-        .from("resumes")
-        .select("id, file_path, file_name, mime_type")
-        .eq("user_id", user.id)
-        .eq("career_profile_id", profileId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (resumeError) throw new ResumeAccessError(503, "Could not load resume");
-      if (r) resumeRow = r;
     }
 
     // Related signals: same-analysis signals whose code semantically
@@ -221,6 +195,7 @@ export async function POST(req: Request) {
       resume: {
         id: resumeRow?.id ?? null,
         file_name: resumeRow?.file_name ?? null,
+        source: resumeSource,
       },
     };
 
@@ -228,8 +203,8 @@ export async function POST(req: Request) {
     // Upload the resume file to OpenAI ONCE at kickoff. Reused on every
     // subsequent turn via the file_id cached on the investigation row.
     let openaiResumeFileId: string | null = null;
-    if (resumeRow) {
-      const { resume, file } = await downloadOwnedResume(supabase, user.id, profileId, resumeRow.id);
+    if (ownedFile) {
+      const { resume, file } = ownedFile;
       openaiResumeFileId = await uploadResumeFileForInvestigation({
         blob: file,
         fileName: resume.file_name || "resume.pdf",
@@ -326,10 +301,10 @@ export async function POST(req: Request) {
     });
   } catch (err: unknown) {
     const limited=usageErrorResponse(err); if(limited)return limited;
-    if (err instanceof ResumeAccessError) return NextResponse.json({ success: false, error: err.message }, { status: err.status });
+    if (err instanceof ResumeAccessError || err instanceof ResumeSourceError) return NextResponse.json({ success: false, error: err.message }, { status: err.status });
     const msg =
       err instanceof Error ? err.message : "Failed to start investigation";
-    console.error("[gap-investigations] POST error:", err);
+    console.error("[gap-investigations] POST failed");
     return NextResponse.json(
       { success: false, error: msg },
       { status: 500 }

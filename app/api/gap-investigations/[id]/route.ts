@@ -1,3 +1,4 @@
+import { publicInvestigationBundle } from "@/lib/resumes/source.server";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { existingActiveProfile, INITIALIZATION_ERROR } from "@/lib/gap-investigation/saved";
@@ -37,7 +38,7 @@ export async function GET(
     if (!bundle.turns.some(turn => turn.role === "assistant" && turn.turn_index === 0)) {
       return NextResponse.json({ success: false, error: INITIALIZATION_ERROR }, { status: 409 });
     }
-    return NextResponse.json({ success: true, data: bundle }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ success: true, data: publicInvestigationBundle(bundle) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (err: unknown) {
     const msg =
       err instanceof Error ? err.message : "Failed to load investigation";

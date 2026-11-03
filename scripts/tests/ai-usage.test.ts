@@ -26,6 +26,7 @@ function sql(query: string, ok = true) {
 const quote = (v: unknown) => "'" + JSON.stringify(v).replaceAll("'", "''") + "'::jsonb";
 const h = (s: string) => createHash('sha256').update(s).digest('hex');
 const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222", P = "33333333-3333-4333-8333-333333333333";
+const R = '44444444-4444-4444-8444-444444444444';
 function claimSQL(user = A, route = 'analysis', key: string = randomUUID(), units = 1, hash: string = key) { return `set role service_role; select public.ai_usage_claim('${user}','${h(key)}','${h(hash)}','${route}',${units});`; }
 function claim(user = A, route = 'analysis', key: string = randomUUID(), units = 1, hash: string = key) { return JSON.parse(sql(claimSQL(user, route, key, units, hash))); }
 type Op = {
@@ -38,21 +39,34 @@ function finish(o: Op) { step(o, 'begin', 'response:0'); step(o, 'response', 're
 function reset() { sql('truncate public.ai_usage_operations,public.ai_usage_buckets; update public.ai_usage_settings set enabled=true,daily_budget_microusd=100000000;'); }
 function persist(o: Op, kind: string, value: unknown, ok = true) { return sql(`set role service_role;select public.ai_usage_persist('${o.id}','${o.owner}','${kind}',${quote(value)});`, ok); }
 before(() => {
-    assert.equal(command('initdb', ['-D', data, '-U', 'postgres', '-A', 'trust', '--no-locale', '-E', 'UTF8']).status, 0);
+    const init = command('initdb', ['-D', data, '-U', 'postgres', '-A', 'trust', '--no-locale', '-E', 'UTF8']);
+    assert.equal(init.status, 0, init.stderr);
     const start = command('pg_ctl', ['-D', data, '-l', join(root, 'server.log'), '-o', `-F -k ${root} -p 55473 -c listen_addresses=''`, '-w', 'start']);
     assert.equal(start.status, 0, start.stderr);
     started = true;
     sql(readFileSync('scripts/tests/ai-usage-fixture.sql', 'utf8'));
-    sql(readFileSync('supabase/migrations/20260923000001_gap_investigations.sql', 'utf8'));
-    sql(readFileSync('supabase/migrations/20261003000001_gap_investigation_dimensions.sql', 'utf8'));
-    sql('grant all on all tables in schema public to service_role');
     sql(readFileSync('supabase/migrations/20261103000001_ai_usage_guard.sql', 'utf8'));
-    sql(`insert into public.profiles(id)values('${A}'),('${B}');insert into public.career_profiles values('${P}','${A}');`);
+    console.log(`Disposable database: ${sql('show server_version')}`);
+    sql(`insert into auth.users(id)values('${A}'),('${B}');insert into public.profiles(id)values('${A}'),('${B}');insert into public.career_profiles(id,user_id,name) values('${P}','${A}','Synthetic profile');insert into public.resumes(id,user_id,career_profile_id,file_path,file_name)values('${R}','${A}','${P}','${A}/123.txt','Synthetic.txt');`);
 });
 after(() => {
     if (started)
         command('pg_ctl', ['-D', data, '-m', 'immediate', '-w', 'stop']);
     rmSync(root, { recursive: true, force: true });
+});
+test('migration commits disabled and omission of enabled cannot authorize generation', () => {
+    // This must precede reset(): assert the actual migration's committed state.
+    assert.equal(sql('select enabled from public.ai_usage_settings'), 'f');
+    assert.equal(claim().code, 'AI_DISABLED');
+    assert.equal(sql('select count(*) from public.ai_usage_operations'), '0');
+    assert.equal(sql('select count(*) from public.ai_usage_buckets'), '0');
+    assert.equal(sql('begin;delete from public.ai_usage_settings;insert into public.ai_usage_settings(id)values(true);select enabled from public.ai_usage_settings;rollback;'), 'f');
+});
+test('hosted fixture enforces enum checks, cross-table references and ownership RLS', () => {
+    sql(`insert into public.analyses(user_id,analysis_type,raw_json)values('${A}','invalid','{}')`, false);
+    sql(`insert into public.analyses(user_id,analysis_type,raw_json,resume_id)values('${A}','initial_onboarding','{}','${randomUUID()}')`, false);
+    sql(`set role authenticated;set request.jwt.claim.sub='${B}';insert into public.career_profiles(user_id,name)values('${A}','Foreign synthetic')`, false);
+    assert.equal(sql(`set role authenticated;set request.jwt.claim.sub='${B}';select count(*) from public.career_profiles where id='${P}'`), '0');
 });
 for (const role of ['anon', 'authenticated'])
     test(`${role} cannot call any accounting RPC or access usage tables`, () => {
@@ -121,7 +135,6 @@ import Module, { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 let providerCalls = 0, uploads = 0, downloads = 0, providerFailure = false;
 let fixtureUser: any = { id: A, is_anonymous: false };
-const R = '44444444-4444-4444-8444-444444444444';
 const meta: any = { id: R, user_id: A, career_profile_id: P, file_path: `${A}/123.txt`, file_name: 'Synthetic.txt', mime_type: 'text/plain' };
 let fixtureRows: Record<string, any[]> = {};
 let localRecords = false, failPersistenceOnce = "";
@@ -190,6 +203,14 @@ test('real Compare handler returns 429/Retry-After and never downloads or invoke
     assert.equal(downloads, 0);
     assert.equal(uploads, 0);
 });
+test('real Compare handler remains disabled until explicit operator approval', async () => {
+    reset(); resetProvider(); sql('update public.ai_usage_settings set enabled=false');
+    const response = await compare(compareRequest());
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).data.code, 'AI_DISABLED');
+    assert.equal(providerCalls + uploads + downloads, 0);
+    assert.equal(sql('select count(*) from public.ai_usage_operations'), '0');
+});
 test('real Compare handler respects global budget before any Storage/provider work', async () => { reset(); resetProvider(); sql('update public.ai_usage_settings set daily_budget_microusd=0'); const r = await compare(compareRequest()); assert.equal(r.status, 429); assert.equal((await r.json()).data.code, 'AI_BUDGET_LIMIT'); assert.equal(downloads + uploads + providerCalls, 0); });
 for (const jobs of [1, 2, 3])
     test(`real authorized ${jobs}-job Compare settles actual SQL accounting and replays without AI`, async () => {
@@ -251,12 +272,14 @@ const IA = '55555555-5555-4555-8555-555555555555', GI = '66666666-6666-4666-8666
 function routeFixtures() { resetProvider(); fixtureRows.analyses = [{ id: IA, user_id: A, career_profile_id: P, resume_id: R, raw_json: { signals: [{ signal_name: 'Leadership', score: 4 }], gaps: [{ gap_title: 'Scope' }], role_requirements: [{ requirement: 'Scope' }] } }]; fixtureRows.gaps = [{ id: GP, analysis_id: IA, user_id: A, gap_code: 'strategy', gap_title: 'Scope' }]; fixtureRows.gap_investigations = [{ id: GI, user_id: A, career_profile_id: P, seed_analysis_id: IA, seed_gap_id: GP, status: 'active', turn_count: 0, context_snapshot: { target: { role: 'PM', level: 'Senior' }, gap: { gap_title: 'Scope' } } }]; fixtureRows.gap_investigation_turns = [{ id: '88888888-8888-4888-8888-888888888888', investigation_id: GI, user_id: A, role: 'assistant', content: 'Synthetic question', turn_index: 0 }]; fixtureRows.gap_investigation_evidence = [{ id: '99999999-9999-4999-8999-999999999999', investigation_id: GI, user_id: A, user_status: 'confirmed', source_type: 'user', claim: 'Synthetic validated candidate experience.' }]; }
 const postBody = (body: unknown) => new Request('http://localhost/api/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 for (const route of ['analysis', 'kickoff', 'turn', 'recommendation', 'insights', 'strategy'])
-    test(`${route} production route rejects exhausted quota with zero Storage/uploads/provider calls`, async () => {
+  for (const mode of ['quota', 'disabled'])
+    test(`${route} production route rejects ${mode} with zero Storage/uploads/provider calls`, async () => {
         reset();
         routeFixtures();
         const category = route === 'analysis' ? 'analysis' : ['kickoff', 'turn'].includes(route) ? 'gap' : 'other';
         const limit = category === 'analysis' ? 5 : category === 'gap' ? 20 : 10;
-        sql(`insert into public.ai_usage_buckets(day,subject,category,used)values((clock_timestamp() at time zone 'UTC')::date,'${A}','${category}',${limit})`);
+        if (mode === 'disabled') sql('update public.ai_usage_settings set enabled=false');
+        else sql(`insert into public.ai_usage_buckets(day,subject,category,used)values((clock_timestamp() at time zone 'UTC')::date,'${A}','${category}',${limit})`);
         let r: Response;
         if (route === 'analysis')
             r = await analyze(postBody({ resume_id: R, jobDescription: 'Synthetic JD' }));
@@ -272,8 +295,8 @@ for (const route of ['analysis', 'kickoff', 'turn', 'recommendation', 'insights'
         }
         else
             r = await (route === 'insights' ? insightsGET : strategyGET)();
-        assert.equal(r.status, 429, JSON.stringify(await r.clone().json()));
-        assert.equal((await r.json()).data.code, 'AI_DAILY_LIMIT');
+        assert.equal(r.status, mode === 'disabled' ? 503 : 429, JSON.stringify(await r.clone().json()));
+        assert.equal((await r.json()).data.code, mode === 'disabled' ? 'AI_DISABLED' : 'AI_DAILY_LIMIT');
         assert.equal(providerCalls + uploads + downloads, 0);
         assert.ok(Number(r.headers.get('Retry-After')) > 0);
     });
@@ -393,8 +416,8 @@ test('all application generation adapters set explicit output, timeout and retry
 test('missing settings fails closed for new admission, recovered claims and pending dispatch',()=>{
  reset();const key=randomUUID(),o=claim(A,'analysis',key).operation;sql(`update public.ai_usage_operations set lease_until=clock_timestamp()-interval '1 second' where id='${o.id}';delete from public.ai_usage_settings;`);
  try {assert.equal(claim(A,'analysis',key).code,'AI_DISABLED');assert.equal(claim(B).code,'AI_DISABLED');}
- finally {sql('insert into public.ai_usage_settings(id,daily_budget_microusd)values(true,100000000)');}
- const recovered=claim(A,'analysis',key).operation;sql('delete from public.ai_usage_settings');try{step(recovered,'begin','response:0',null,false);}finally{sql('insert into public.ai_usage_settings(id,daily_budget_microusd)values(true,100000000)');}
+ finally {sql('insert into public.ai_usage_settings(id,enabled,daily_budget_microusd)values(true,true,100000000)');}
+ const recovered=claim(A,'analysis',key).operation;sql('delete from public.ai_usage_settings');try{step(recovered,'begin','response:0',null,false);}finally{sql('insert into public.ai_usage_settings(id,enabled,daily_budget_microusd)values(true,true,100000000)');}
  assert.equal(sql(`select calls from public.ai_usage_operations where id='${o.id}'`),'0');
 });
 test('unavailable accounting store returns 503 with zero provider or privileged Storage calls',async()=>{
@@ -422,7 +445,25 @@ test('expired pre-provider claim with a persisted answer requires original-opera
     assert.ok(recovered.steps['persist:user_turn']);
     assert.equal(Number(sql("select used from public.ai_usage_buckets where category='gap'")), 1);
 });
-test('operational rollback pauses AI and revokes dispatch/persistence while retaining accounting', () => { reset(); const key = randomUUID(); finish(claim(A, 'analysis', key).operation); sql(readFileSync('supabase/rollback/20261103000001_ai_usage_guard.sql', 'utf8')); assert.equal(claim(B).code, 'AI_DISABLED'); assert.ok(claim(A, 'analysis', key).replay); assert.equal(sql("select has_function_privilege('service_role','public.ai_usage_step(uuid,uuid,text,text,jsonb)','execute')"), 'f'); assert.equal(sql('select count(*)from public.ai_usage_operations'), '1'); });
+test('operational rollback pauses AI and preserves uncertain holds, receipts and private permissions', () => {
+    reset();
+    const key = randomUUID();
+    finish(claim(A, 'analysis', key).operation);
+    const uncertain = claim(B).operation;
+    step(uncertain, 'begin', 'response:0');
+    end(uncertain, 500);
+    const held = sql("select reserved from public.ai_usage_buckets where category='budget'");
+    sql(readFileSync('supabase/rollback/20261103000001_ai_usage_guard.sql', 'utf8'));
+    assert.equal(claim(A, 'turn').code, 'AI_DISABLED');
+    assert.ok(claim(A, 'analysis', key).replay);
+    for (const signature of ['ai_usage_step(uuid,uuid,text,text,jsonb)', 'ai_usage_persist(uuid,uuid,text,jsonb)'])
+        assert.equal(sql(`select has_function_privilege('service_role','public.${signature}','execute')`), 'f');
+    assert.equal(sql(`select state from public.ai_usage_operations where id='${uncertain.id}'`), 'uncertain');
+    assert.equal(sql("select reserved from public.ai_usage_buckets where category='budget'"), held);
+    assert.equal(sql('select count(*) from public.ai_usage_operations'), '2');
+    assert.equal(sql("select count(*) from public.ai_usage_operations where steps ? 'response:0'"), '1');
+    sql('set role authenticated;select * from public.ai_usage_operations', false);
+});
 test('provider adapter refuses unguarded application generation or uploads', async () => {
     const fake: any = { responses: { create: async () => { throw Error('Unexpected provider call'); } }, files: { create: async () => { throw Error('Unexpected upload'); } } };
     await assert.rejects(aiResponse(fake, { model: 'gpt-4.1', input: 'Synthetic' }, 'analysis'), (error: any) => error.code === 'AI_OPERATION_REQUIRED');

@@ -8,10 +8,12 @@ begin
 
 end $$;
 create table public.ai_usage_settings (
-  id boolean primary key default true check(id), enabled boolean not null default true,
+  id boolean primary key default true check(id), enabled boolean not null default false,
   daily_budget_microusd bigint not null default 10000000 check(daily_budget_microusd >= 0)
 );
-insert into public.ai_usage_settings(id) values(true);
+-- Installation must never authorize dispatch, including on an existing Preview.
+-- Enabling generation is a separate, explicitly approved operator action.
+insert into public.ai_usage_settings(id,enabled) values(true,false);
 create table public.ai_usage_buckets (
   day date not null, subject text not null, category text not null,
   used integer not null default 0 check(used >= 0),

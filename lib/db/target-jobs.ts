@@ -1,3 +1,4 @@
+import { publicAnalysisJson } from "@/lib/resumes/source.server";
 import { requireUserAndActiveProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
 
@@ -129,7 +130,7 @@ export async function getAnalysesForTargetJob(
     throw new Error(`Failed to fetch analyses: ${error.message}`);
   }
 
-  return (data ?? []) as TargetJobAnalysisSummary[];
+  return (data ?? []).map(row => ({ ...row, raw_json: publicAnalysisJson(row.raw_json) })) as TargetJobAnalysisSummary[];
 }
 
 export async function getTargetJobById(

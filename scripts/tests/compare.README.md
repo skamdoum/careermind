@@ -60,6 +60,7 @@ Results for this change (2026-11-02):
 | Check | Result |
 | --- | --- |
 | Compare regression suite | 59 passed |
+| Inherited Storage policy/rollback suite (local PostgreSQL) | 17 passed |
 | Action Plan suite | 14 passed |
 | Analysis metadata suite | 19 passed |
 | Investigation navigation suite | 47 passed |
@@ -67,13 +68,72 @@ Results for this change (2026-11-02):
 | `npx tsc --noEmit` | Passed |
 | ESLint on compare route, helpers and test | Passed |
 | `npm run build` | Passed; existing middleware-to-proxy deprecation warning |
+| Real Auth/Storage/data + guarded local Compare rejection suite | 15 checks passed; cleanup verified |
 
-These deterministic tests are not live Supabase RLS/storage-policy, authenticated
-browser, or actual-model checks. Before production rollout, verify registered and
-anonymous sessions against development Supabase, two-user/profile isolation, an
-owned historical file download, and existing path conventions in real data.
+All 205 automated tests passed after merging `main` at
+`89ff182537dff64d44971bd1c10e57b4783ca016`. The package-script conflict retained
+`test:compare`, `test:resume-storage`, and `test:resume-storage:live`; this update
+also adds `test:compare:live`. Compare production code is unchanged from the
+reviewed `24a37665fbc98da113cc9bd6125814db0f3bc88f`; analysis/UI code is unchanged
+from main. Storage migrations/rollback files are inherited from merged PR #11,
+not new changes in PR #10. No new migration is required or was applied.
 
-No new environment variables, migrations, rate limiting, persistence, Phase 2a
+## Rejection-only live integration (no paid AI)
+
+`compare.live.ts` exercises the actual built route with real Supabase Auth,
+metadata, and three synthetic text resumes belonging to two disposable users.
+It requires explicit opt-in to the configured project and a loopback app. The
+configured project is shared across Vercel environments; only fixtures created by
+this run are changed, never existing users' resume records or file contents.
+
+Run the built local server with the **test-only** `compare-no-ai-preload.mjs`:
+
+```sh
+npm run build
+# Choose an empty audit file outside the repository and an unused loopback port.
+: > /private/tmp/careermind-compare-audit.jsonl
+CAREERMIND_COMPARE_TEST_PROJECT_REF=<confirmed-project-ref> \
+CAREERMIND_COMPARE_AUDIT_FILE=/private/tmp/careermind-compare-audit.jsonl \
+NEXT_TELEMETRY_DISABLED=1 \
+NODE_OPTIONS="--import $PWD/scripts/tests/compare-no-ai-preload.mjs" \
+npm run start -- --hostname 127.0.0.1 --port 3108
+
+# In another shell, without the preload on the fixture-runner process:
+CAREERMIND_COMPARE_TEST_PROJECT_REF=<confirmed-project-ref> \
+CAREERMIND_COMPARE_AUDIT_FILE=/private/tmp/careermind-compare-audit.jsonl \
+CAREERMIND_COMPARE_TEST_BASE_URL=http://127.0.0.1:3108 \
+npm run test:compare:live
+```
+
+The preload permits Supabase Auth and database traffic (fixture setup reuses the
+existing authorized profile/resume APIs), but blocks and audits every outbound
+Storage/provider/unexpected fetch from the app server. The fixture process uploads
+and reads only its synthetic files directly. The test verifies that the preload
+loaded, observed real Auth/database reads, and recorded **zero blocked attempts**;
+an attempted privileged download or provider call fails the test and cannot incur
+an AI charge. This instrumentation follows the installed SDKs' fetch boundaries;
+it is not a production rate limiter or deployment configuration.
+
+All 15 live checks passed: registered users, canonical uploads/metadata and owned
+synthetic downloads, historical associations after a newer upload, unauthenticated
+401, foreign-ID 404 in both directions, forged body identity/fallback rejection,
+inactive-profile 404, owned metadata with a foreign path 403, path-only/malformed
+references, nonexistent IDs, malformed/empty/excessive job arrays, oversized
+jobs/text/actual JSON bytes, invalid JSON/media, and missing active-profile 403.
+The server audit recorded 70 Auth/database calls and zero Storage/provider/
+unexpected attempts. Both disposable users, all metadata and three uploaded
+synthetic files were removed; cleanup was verified. No policies, migration history,
+Vercel settings, existing resume contents, or Production deployments were changed.
+
+Authorized end-to-end Compare success is **not tested live**: it necessarily calls
+OpenAI. The one-to-three-job response contract, file selection and text fallback
+remain covered by production-code deterministic tests with provider/network
+doubles. These are not actual-model results. Anonymous Auth rejection is covered
+deterministically, but anonymous Auth signup was not exercised live. No browser
+automation or paid OpenAI calls were performed. Explicit paid-call approval is
+needed for a real authorized success smoke test.
+
+No new runtime environment variables, migrations, rate limiting, persistence, Phase 2a
 changes or production configuration are included. Existing server environment
 variables remain required. Resume binary size/type enforcement and OpenAI SDK
 retry behavior are unchanged; this PR bounds comparison request inputs, not file

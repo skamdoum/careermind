@@ -11,6 +11,7 @@
   "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
   "eval:rescore": "tsx scripts/eval/rescore.ts",
   "test:compare": "node --import tsx --test scripts/tests/compare.test.ts",
+  "test:compare:live": "node --import tsx scripts/tests/compare.live.ts",
   "test:resume-storage": "node --import tsx --test scripts/tests/resume-storage-isolation.test.ts",
   "test:resume-storage:live": "node --import tsx scripts/tests/resume-storage-isolation.live.ts",
   "test:investigation-navigation": "node --import tsx --test scripts/tests/investigation-navigation.test.ts",

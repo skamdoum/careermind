@@ -1,0 +1,12 @@
+-- Local test fixture only. Matches the live API's exposed field types/nullability;
+-- it is not a replacement migration for CareerMind's pre-existing base schema.
+create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
+create schema auth;
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+create table public.profiles(id uuid primary key,active_career_profile_id uuid);
+create table public.career_profiles(id uuid primary key,user_id uuid not null references public.profiles(id));
+create table public.analyses(id uuid primary key default gen_random_uuid(),user_id uuid not null references public.profiles(id),career_profile_id uuid references public.career_profiles(id),resume_id uuid,job_description_id uuid,career_goal_id uuid,analysis_type text not null,model_name text,status text not null default 'completed',raw_json jsonb not null,summary text,created_at timestamptz not null default now());
+create table public.signal_assessments(id uuid primary key default gen_random_uuid(),analysis_id uuid not null references public.analyses(id),user_id uuid not null references public.profiles(id),signal_name text not null,signal_code text,score int not null check(score between 1 and 5),rationale text,evidence text[],risk_level text,created_at timestamptz not null default now());
+create table public.gaps(id uuid primary key default gen_random_uuid(),analysis_id uuid not null references public.analyses(id),user_id uuid not null references public.profiles(id),gap_title text not null,gap_description text not null,gap_code text,priority int not null check(priority between 1 and 5),recommended_fix text,created_at timestamptz not null default now());
+create table public.plans(id uuid primary key default gen_random_uuid(),analysis_id uuid references public.analyses(id),user_id uuid not null references public.profiles(id),plan_type text not null,start_date date,end_date date,next_best_action text not null,created_at timestamptz not null default now());
+create table public.plan_tasks(id uuid primary key default gen_random_uuid(),plan_id uuid not null references public.plans(id),user_id uuid not null references public.profiles(id),title text not null,description text,priority int not null check(priority between 1 and 5),status text not null default 'not_started',task_type text,due_date date,created_at timestamptz not null default now(),updated_at timestamptz not null default now());

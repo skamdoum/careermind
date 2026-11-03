@@ -1,7 +1,7 @@
+import { withAIUsage, aiResponse, aiFile, persistAIRecords, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
 import { downloadOwnedResume } from "@/lib/resumes/download.server";
 import { ResumeAccessError } from "@/lib/resumes/authorization";
 import OpenAI from "openai";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
 import { createClient } from "@/lib/supabase/server";
@@ -38,17 +38,27 @@ export async function POST(req: Request) {
     const activeProfile = await resolveActiveCareerProfile(supabase, user.id);
     const activeProfileId = activeProfile.id;
 
-    const body = await req.json();
+    const body = await readAIInput(req);
     const {
       resumeText,
       jobDescription,
       targetRole,
       targetLevel,
-      latestResume,
+      latestResume: legacyResume,
       career_goal_id,
       job_description_id,
     } = body;
 
+    if ((resumeText !== undefined && typeof resumeText !== "string") ||
+      (jobDescription !== undefined && typeof jobDescription !== "string")) throw new AIUsageError(400, "AI_INVALID_INPUT");
+    if ((typeof resumeText === "string" && resumeText.length > 60000) ||
+      (typeof jobDescription === "string" && jobDescription.length > 30000)) throw new AIUsageError(413, "AI_INPUT_TOO_LARGE");
+    const latestResume = legacyResume && typeof legacyResume === "object" && !Array.isArray(legacyResume) ? legacyResume as Record<string,unknown> : null;
+    if ((legacyResume != null && !latestResume) ||
+      (targetRole !== undefined && typeof targetRole !== "string") ||
+      (targetLevel !== undefined && typeof targetLevel !== "string") ||
+      (career_goal_id != null && typeof career_goal_id !== "string") ||
+      (job_description_id != null && typeof job_description_id !== "string")) throw new AIUsageError(400,"AI_INVALID_INPUT");
     // Accept an explicit resume_id, with backwards-compat for the older
     // { latestResume: { id } } shape. The server never trusts client-supplied
     // file_path / file_name / mime_type — those are always resolved from the
@@ -243,16 +253,16 @@ export async function POST(req: Request) {
       );
     }
 
+    return await withAIUsage({ userId:user.id, route:"analysis", request:req,
+      input:{ resume:resolvedResume, resumeText:resolvedResume ? null : resumeText, job:effectiveJobDescription, role:effectiveTargetRole, level:effectiveTargetLevel, career_goal_id, job_description_id } }, async()=>{
+    if (effectiveJobDescription.length>30000 || (effectiveTargetRole?.length??0)>200 || (effectiveTargetLevel?.length??0)>200) throw new AIUsageError(413,"AI_INPUT_TOO_LARGE");
     const resumeContentParts: any[] = [];
     let debugOpenAiFileId: string | null = null;
 
     if (resolvedResume) {
       const { resume, file } = await downloadOwnedResume(supabase, user.id, activeProfileId, resolvedResume.id);
       resolvedResume = resume as ResumeRow;
-      const openaiFile = await openai.files.create({
-        file,
-        purpose: "user_data",
-      });
+      const openaiFile = await aiFile(openai, file);
 
       debugOpenAiFileId = openaiFile.id;
 
@@ -283,7 +293,7 @@ export async function POST(req: Request) {
       openai_file_id: debugOpenAiFileId,
       used_resume_text_fallback: !resolvedResume && !!resumeText,
     });
-    const response = await openai.responses.create({
+    const response = await aiResponse(openai, {
       model: "gpt-4.1",
       input: [
         {
@@ -889,7 +899,7 @@ Return only valid JSON.`,
           }
         }
       }
-    });
+    }, "analysis");
 
     const content = response.output_text;
     const parsed = JSON.parse(content);
@@ -902,29 +912,13 @@ Return only valid JSON.`,
     // effect can be measured independently before that mechanical layer is
     // added. Deferred to V2.3 pending V2.2 regression measurement.
 
-    const { data: analysisRow, error: analysisError } = await supabaseAdmin
-      .from("analyses")
-      .insert({
-        user_id: user.id,
-        analysis_type: "initial_onboarding",
-        model_name: "gpt-4.1",
-        raw_json: parsed,
-        summary: parsed.positioning_summary,
-        status: "completed",
-        career_profile_id: activeProfileId,
-        career_goal_id: career_goal_id ?? null,
-        job_description_id: job_description_id ?? null,
-        // Persist the server-resolved resume id — not the client's — so the
-        // analysis row is always attributable to the file we actually sent.
-        resume_id: resolvedResume?.id ?? null,
-      })
-      .select()
-      .single();
-
-    if (analysisError) throw analysisError;
-
-    const analysisId = analysisRow.id;
-
+    const analysisRecord = {
+      analysis_type:"initial_onboarding", model_name:"gpt-4.1", raw_json:parsed,
+      summary:parsed.positioning_summary, status:"completed", career_profile_id:activeProfileId,
+      career_goal_id:career_goal_id ?? null, job_description_id:job_description_id ?? null,
+      resume_id:resolvedResume?.id ?? null,
+    };
+    let signalRows: unknown[] = [], gapRows: unknown[] = [], taskRows: unknown[] = [];
     if (parsed.signals?.length) {
 const normalizeRiskLevel = (value: unknown): "low" | "medium" | "high" => {
   const v = String(value || "").trim().toLowerCase();
@@ -952,8 +946,8 @@ const normalizeSignalCode = (v: unknown): string | null => {
   return signalCodeSet.has(raw) ? raw : null;
 };
 
-const signalRows = parsed.signals.map((s: any) => ({
-  analysis_id: analysisId,
+signalRows = parsed.signals.map((s: any) => ({
+
   user_id: user.id,
   signal_code: normalizeSignalCode(s.signal_code),
   signal_name: s.signal_name,
@@ -963,13 +957,6 @@ const signalRows = parsed.signals.map((s: any) => ({
   risk_level: normalizeRiskLevel(s.risk_level),
 }));
 
- console.log("PARSED RESULT:", parsed);
- 
-      const { error } = await supabaseAdmin
-        .from("signal_assessments")
-        .insert(signalRows);
-
-      if (error) throw error;
     }
 
     if (parsed.gaps?.length) {
@@ -1003,8 +990,8 @@ const signalRows = parsed.signals.map((s: any) => ({
       const normalizeGapPriority = (index: number): number =>
         Math.max(1, Math.min(5, index + 1));
 
-      const gapRows = parsed.gaps.map((g: any, index: number) => ({
-        analysis_id: analysisId,
+      gapRows = parsed.gaps.map((g: any, index: number) => ({
+
         user_id: user.id,
         gap_code: normalizeGapCode(g.gap_code),
         gap_title: g.gap_title,
@@ -1013,26 +1000,8 @@ const signalRows = parsed.signals.map((s: any) => ({
         recommended_fix: g.recommended_fix
       }));
 
-      const { error } = await supabaseAdmin
-        .from("gaps")
-        .insert(gapRows);
-
-      if (error) throw error;
     }
-
-    const { data: planRow, error: planError } = await supabaseAdmin
-      .from("plans")
-      .insert({
-        user_id: user.id,
-        analysis_id: analysisId,
-        plan_type: "initial",
-        next_best_action: parsed.plan.next_best_action
-      })
-      .select()
-      .single();
-
-    if (planError) throw planError;
-
+    const planRecord = { plan_type:"initial", next_best_action:parsed.plan.next_best_action };
     if (parsed.plan?.tasks?.length) {
       const allowedTaskTypes = new Set([
         "resume",
@@ -1059,8 +1028,8 @@ const signalRows = parsed.signals.map((s: any) => ({
         return "strategy";
       };
 
-      const taskRows = parsed.plan.tasks.map((t: any) => ({
-        plan_id: planRow.id,
+      taskRows = parsed.plan.tasks.map((t: any) => ({
+
         user_id: user.id,
         title: t.title,
         description: t.description,
@@ -1069,22 +1038,12 @@ const signalRows = parsed.signals.map((s: any) => ({
         status: "not_started"
       }));
 
-      const { error } = await supabaseAdmin
-        .from("plan_tasks")
-        .insert(taskRows);
-
-      if (error) throw error;
     }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        analysisId,
-        planId: planRow.id,
-        result: parsed,
-      },
+    const result = await persistAIRecords("analysis", {analysis:analysisRecord,signals:signalRows,gaps:gapRows,plan:planRecord,tasks:taskRows,result:parsed});
+    return NextResponse.json({success:true,data:result});
     });
   } catch (error: any) {
+    const limited = usageErrorResponse(error); if(limited) return limited;
     if (error instanceof ResumeAccessError) return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     console.error("Analyze API error:", error);
 

@@ -89,7 +89,7 @@ export default function InvestigationClient({ initialBundle }: Props) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: trimmed }),
+          body: JSON.stringify({ content: trimmed, parent_turn_id: [...bundle.turns].reverse().find(turn=>turn.role === "assistant")?.id }),
         }
       );
       const json = await res.json();

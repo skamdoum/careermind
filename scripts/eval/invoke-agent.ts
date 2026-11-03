@@ -201,7 +201,7 @@ export async function runScenarioAgent(args: {
     input: AgentTurnInput
   ): Promise<AgentTurnFullResult> => {
     try {
-      return await runAgentTurnFull(input);
+      return await runAgentTurnFull(input,{unmeteredEvaluation:true});
     } catch (err) {
       harness_errors.push(
         `Agent call failed on turn ${trajectory.length}: ${

@@ -1,3 +1,4 @@
+import { usageStoreDouble } from "./usage-store-double";
 /* eslint-disable @typescript-eslint/no-explicit-any -- Network-boundary doubles only; production reader/evaluator/validator/route/UI execute unchanged. */
 import assert from "node:assert/strict";
 import { createRequire, default as Module } from "node:module";
@@ -13,6 +14,8 @@ class Provider {
 }
 const loader = (Module as any)._load;
 (Module as any)._load = function(name: string, ...args: unknown[]) {
+  if (/(?:ai-usage\/|\.\/)store\.server(?:\.ts)?$/.test(name)) return usageStoreDouble(()=>client);
+  if (name === "server-only") return {};
   if (name === "openai") return Provider;
   if (/lib\/supabase\/server(?:\.ts)?$/.test(name)) return { createClient: async () => client };
   if (/lib\/supabase\/admin(?:\.ts)?$/.test(name)) throw new Error("Read-only evaluator must not import admin client");

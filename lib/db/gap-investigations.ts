@@ -1,3 +1,4 @@
+import { providerContext } from "@/lib/ai-usage/provider";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // Shared type surface for the Gap Investigation Agent.
@@ -441,6 +442,7 @@ export async function persistCandidateEvidence(args: {
 
   if (rows.length === 0) return;
 
+  if(providerContext.getStore()){const {persistAIRecords}=await import("@/lib/ai-usage/guard");await persistAIRecords("evidence",rows);return;}
   const { error } = await supabaseAdmin
     .from("gap_investigation_evidence")
     .insert(rows);

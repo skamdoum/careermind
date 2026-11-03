@@ -1,3 +1,4 @@
+import { aiResponse, aiFile, AIUsageError } from "@/lib/ai-usage/provider";
 import OpenAI from "openai";
 import {
   DIMENSION_NAMES,
@@ -711,9 +712,7 @@ export async function runAgentTurn(
   return output;
 }
 
-export async function runAgentTurnFull(
-  input: AgentTurnInput
-): Promise<AgentTurnFullResult> {
+function agentInput(input:AgentTurnInput):OpenAI.Responses.ResponseInput {
   const userContent: Array<
     | { type: "input_file"; file_id: string }
     | { type: "input_text"; text: string }
@@ -731,6 +730,15 @@ export async function runAgentTurnFull(
     text: buildUserInputText(input),
   });
 
+  return [{role:"system",content:[{type:"input_text",text:SYSTEM_PROMPT}]},{role:"user",content:userContent}];
+}
+export function assertAgentInputSize(input:AgentTurnInput){
+  if(Buffer.byteLength(JSON.stringify(agentInput(input)),"utf8")>512*1024)throw new AIUsageError(413,"AI_CONTEXT_TOO_LARGE");
+}
+
+export async function runAgentTurnFull(
+  input: AgentTurnInput, options: {unmeteredEvaluation?:boolean} = {}
+): Promise<AgentTurnFullResult> {
   const model = input.model_override ?? AGENT_MODEL_NAME;
 
   // Reasoning models (o-series) accept a `reasoning` parameter.
@@ -743,19 +751,10 @@ export async function runAgentTurnFull(
       ? { effort: input.reasoning_effort }
       : undefined;
 
-  const response = await openai.responses.create({
+  const response = await aiResponse(openai,{
     model,
     ...(reasoning ? { reasoning } : {}),
-    input: [
-      {
-        role: "system",
-        content: [{ type: "input_text", text: SYSTEM_PROMPT }],
-      },
-      {
-        role: "user",
-        content: userContent,
-      },
-    ],
+    input: agentInput(input),
     text: {
       format: {
         type: "json_schema",
@@ -764,7 +763,7 @@ export async function runAgentTurnFull(
         schema: AGENT_JSON_SCHEMA,
       },
     },
-  });
+  },input.is_kickoff ? "kickoff" : "turn",options.unmeteredEvaluation);
 
   const raw = response.output_text;
   const output = JSON.parse(raw) as AgentTurnOutput;
@@ -795,11 +794,8 @@ export async function uploadResumeFileForInvestigation(args: {
   fileName: string;
   mimeType: string;
 }): Promise<string> {
-  const openaiFile = await openai.files.create({
-    file: new File([args.blob], args.fileName, {
+  const openaiFile = await aiFile(openai,new File([args.blob], args.fileName, {
       type: args.mimeType,
-    }),
-    purpose: "user_data",
-  });
+    }));
   return openaiFile.id;
 }

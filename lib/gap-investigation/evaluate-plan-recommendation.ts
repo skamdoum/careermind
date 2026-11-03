@@ -1,3 +1,4 @@
+import { aiResponse } from "@/lib/ai-usage/provider";
 import OpenAI from "openai";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
@@ -25,7 +26,7 @@ Unknown is not deficient: if ANY assessed dimension is unknown, stop before task
 
 // Kept separate so the live benchmark records raw classifications as well as
 // validation acceptance; the production endpoint always uses the validated wrapper.
-export async function generatePlanAssessment(input: RecommendationInput): Promise<unknown> {
+export async function generatePlanAssessment(input: RecommendationInput, options: {unmeteredEvaluation?:boolean} = {}): Promise<unknown> {
   if (!input.evidence.length) throw new AssessmentError("insufficient_grounding", "Confirm or edit the supporting evidence before checking your plan.");
   // Task status is display metadata, never evidence of candidate resolution.
   // Excluding it prevents a completed task from changing the semantic decision.
@@ -39,11 +40,11 @@ export async function generatePlanAssessment(input: RecommendationInput): Promis
   });
   if (payload.length > 60000) throw new AssessmentError("assessment_too_large", "This investigation and plan are too large to assess safely in one request.", 413);
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 60_000, maxRetries: 0 });
-  const response = await openai.responses.create({
+  const response = await aiResponse(openai,{
     model: RECOMMENDATION_MODEL, temperature: 0, max_output_tokens: 2400,
     input: [{ role: "system", content: RECOMMENDATION_PROMPT }, { role: "user", content: payload }],
     text: { format: zodTextFormat(schema, "careermind_plan_recommendation") },
-  });
+  },"recommendation",options.unmeteredEvaluation);
   let parsed: unknown;
   try { parsed = JSON.parse(response.output_text); }
   catch { throw new AssessmentError("invalid_assessment", "The assessment was incomplete or could not be read. Please try again.", 502); }

@@ -1,3 +1,4 @@
+import { usageStoreDouble } from "./usage-store-double";
 /* eslint-disable @typescript-eslint/no-explicit-any -- Network and React-hook boundaries only; real readers, handlers and components run. */
 import assert from "node:assert/strict";
 import Module, { createRequire } from "node:module";
@@ -12,10 +13,12 @@ let navigations: string[] = [];
 let answerReads: Array<{ columns: string; userId: unknown; role: unknown; ids: unknown[]; offset: number }> = [];
 const load = (Module as any)._load;
 (Module as any)._load = function(name: string, ...args: unknown[]) {
+  if (/(?:ai-usage\/|\.\/)store\.server(?:\.ts)?$/.test(name)) return usageStoreDouble(()=>client);
   if (name === "server-only") return {};
   if (/lib\/supabase\/server(?:\.ts)?$/.test(name)) return { createClient: async () => client };
   if (/lib\/supabase\/admin(?:\.ts)?$/.test(name)) return { supabaseAdmin: { from: (table: string) => client.from(table) } };
   if (/gap-investigation\/agent(?:\.ts)?$/.test(name)) return {
+    assertAgentInputSize:()=>{},
     AGENT_MODEL_NAME: "test",
     uploadResumeFileForInvestigation: async () => { calls++; throw new Error("Unexpected upload"); },
     runAgentTurn: async () => { calls++; if (agentFailure) throw new Error("Fixture agent failure"); return { action: "ask_question", next_question: "Saved first question", candidate_evidence: [] }; },
@@ -90,7 +93,7 @@ function reset() {
     }; return q;
   } };
 }
-const post = () => POST(new Request("http://localhost/api/gap-investigations", { method: "POST", body: JSON.stringify({ gap_id: "gap" }) }));
+const post = () => POST(new Request("http://localhost/api/gap-investigations", { method: "POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ gap_id: "gap" }) }));
 const get = () => GET(new Request("http://localhost/api/gap-investigations/saved"), { params: Promise.resolve({ id: "saved" }) });
 
 test("discovery selects exact user/profile/analysis/gap and keeps all historical statuses", async () => {

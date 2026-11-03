@@ -1,3 +1,4 @@
+import { withAIUsage, aiResponse, usageErrorResponse, AIUsageError } from "@/lib/ai-usage/guard";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
@@ -54,10 +55,10 @@ export async function GET() {
     const supabase = await createClient();
 
     const {
-      data: { user },
+      data: { user }, error:authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -136,13 +137,14 @@ export async function GET() {
       .update(JSON.stringify(inputPayload))
       .digest("hex");
 
-    const { data: cachedRow } = await supabase
+    const { data: cachedRow, error:cacheReadError } = await supabase
       .from("strategy_narratives")
       .select("target_positioning, strategic_direction, where_to_focus, where_to_avoid, positioning_tradeoffs, narrative_to_tell, risks")
       .eq("user_id", user.id)
       .eq("source_hash", source_hash)
       .maybeSingle();
 
+    if(cacheReadError)throw new AIUsageError(503,"AI_CACHE_UNAVAILABLE",30);
     if (cachedRow) {
       return NextResponse.json({
         success: true,
@@ -159,7 +161,8 @@ export async function GET() {
       });
     }
 
-    const response = await openai.responses.create({
+    return await withAIUsage({userId:user.id,route:"strategy",input:{profileId:activeProfile.id,source_hash}},async()=>{
+    const response = await aiResponse(openai,{
       model: "gpt-4.1",
       input: [
         {
@@ -244,7 +247,7 @@ Field rules:
           },
         },
       },
-    });
+    },"strategy");
 
     let parsed: any;
     try {
@@ -255,7 +258,7 @@ Field rules:
     }
 
     try {
-      await supabase.from("strategy_narratives").insert({
+      const {error:cacheError}=await supabase.from("strategy_narratives").insert({
         user_id: user.id,
         source_hash,
         target_positioning: parsed.target_positioning,
@@ -266,8 +269,10 @@ Field rules:
         narrative_to_tell: parsed.narrative_to_tell,
         risks: parsed.risks,
       });
+      if(cacheError)throw new AIUsageError(503,"AI_USAGE_UNAVAILABLE");
     } catch (insertErr) {
-      console.error("STRATEGY NARRATIVE CACHE INSERT ERROR:", insertErr);
+      throw insertErr;
+
     }
 
     return NextResponse.json({
@@ -283,8 +288,16 @@ Field rules:
       },
       cached: false,
     });
+    });
   } catch (err) {
+    const limited=usageErrorResponse(err); if(limited)return limited;
     console.error("STRATEGY NARRATIVE ERROR:", err);
     return NextResponse.json({ success: false, error: "Failed to generate strategy narrative" }, { status: 500 });
   }
+}
+
+// HEAD probes must never generate narratives.
+export async function HEAD(){
+  const client=await createClient();const {data:{user},error}=await client.auth.getUser();
+  return new Response(null,{status:error||!user?401:200,headers:{"Cache-Control":"private, no-store"}});
 }

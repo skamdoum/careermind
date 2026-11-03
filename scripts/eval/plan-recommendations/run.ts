@@ -15,7 +15,7 @@ async function main() {
     if (callsProvider) providerCases++;
     let raw: unknown;
     try {
-      raw = await generatePlanAssessment(scenario.input);
+      raw = await generatePlanAssessment(scenario.input,{unmeteredEvaluation:true});
       const prediction = (raw as {outcome?: string})?.outcome;
       const expected = scenario.expected === "insufficient_grounding" ? "INSUFFICIENT_EVIDENCE" : scenario.expected;
       providerCorrect += Number(prediction === expected);

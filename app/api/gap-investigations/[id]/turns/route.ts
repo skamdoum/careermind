@@ -1,6 +1,7 @@
+import type { GapInvestigationTurnRow } from "@/lib/db/gap-investigations";
+import { withAIUsage, usageCheckpoint, persistAIRecords, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   INVESTIGATION_TURN_SAFETY_CAP,
   latestDecisionState,
@@ -8,7 +9,7 @@ import {
   loadInvestigationBundle,
   persistCandidateEvidence,
 } from "@/lib/db/gap-investigations";
-import { runAgentTurn } from "@/lib/gap-investigation/agent";
+import { runAgentTurn, assertAgentInputSize } from "@/lib/gap-investigation/agent";
 
 // POST /api/gap-investigations/[id]/turns
 // Body: { content: string }
@@ -34,7 +35,7 @@ export async function POST(
       );
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await readAIInput(req);
     const content =
       typeof body?.content === "string" ? body.content.trim() : "";
     if (!content) {
@@ -44,15 +45,22 @@ export async function POST(
       );
     }
 
-    const bundle = await loadInvestigationBundle(id, user.id);
-    if (!bundle) {
+    const liveBundle = await loadInvestigationBundle(id, user.id);
+    if (!liveBundle) {
       return NextResponse.json(
         { success: false, error: "Investigation not found" },
         { status: 404 }
       );
     }
 
+    if(content.length>8000)throw new AIUsageError(413,"AI_INPUT_TOO_LARGE");
+    return await withAIUsage({userId:user.id,route:"turn",request:req,input:{id,content,parent:body.parent_turn_id ?? (req.headers.has("Idempotency-Key") ? null : liveBundle.turns.at(-1)?.id)}},async()=>{
+    const bundle=await usageCheckpoint("turnContext",async()=>{
+      if(Buffer.byteLength(JSON.stringify(liveBundle),"utf8")>480*1024)throw new AIUsageError(413,"AI_CONTEXT_TOO_LARGE");
+      return liveBundle;
+    });
     const { investigation, turns, evidence } = bundle;
+    if(body.parent_turn_id !== undefined && body.parent_turn_id !== [...turns].reverse().find(turn=>turn.role === "assistant")?.id) throw new AIUsageError(409,"AI_CONVERSATION_CHANGED");
 
     if (investigation.status !== "active") {
       return NextResponse.json(
@@ -64,32 +72,22 @@ export async function POST(
       );
     }
 
+    assertAgentInputSize({context:investigation.context_snapshot,
+      transcript:[...turns,{id:"",investigation_id:investigation.id,user_id:user.id,role:"user",content,structured:null,turn_index:turns.length,created_at:""}],
+      evidence,turn_count:turns.filter(t=>t.role === "user").length+1,openai_resume_file_id:investigation.openai_resume_file_id,
+      is_kickoff:false,prior_dimension_coverage:latestDimensionCoverage(turns),prior_decision_state:latestDecisionState(turns)});
     // Append the user turn first — the model reads it in the next call
     // via the transcript block.
     const nextUserTurnIndex = turns.length;
 
-    const { data: userTurn, error: userTurnErr } = await supabaseAdmin
-      .from("gap_investigation_turns")
-      .insert({
+    const userTurn = await persistAIRecords<GapInvestigationTurnRow>("user_turn",{
         investigation_id: investigation.id,
         user_id: user.id,
         role: "user",
         content,
         structured: null,
         turn_index: nextUserTurnIndex,
-      })
-      .select()
-      .single();
-
-    if (userTurnErr || !userTurn) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: userTurnErr?.message || "Failed to save your answer",
-        },
-        { status: 500 }
-      );
-    }
+      });
 
     const fullTranscript = [
       ...turns,
@@ -254,28 +252,14 @@ export async function POST(
         ? agentOut.next_question
         : agentOut.conclusion.summary || "(investigation concluded)";
 
-    const { data: assistantTurn, error: asstErr } = await supabaseAdmin
-      .from("gap_investigation_turns")
-      .insert({
+    const assistantTurn = await persistAIRecords<GapInvestigationTurnRow>("assistant_turn",{
         investigation_id: investigation.id,
         user_id: user.id,
         role: "assistant",
         content: assistantContent,
         structured: agentOut,
         turn_index: nextUserTurnIndex + 1,
-      })
-      .select()
-      .single();
-
-    if (asstErr || !assistantTurn) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: asstErr?.message || "Failed to save agent turn",
-        },
-        { status: 500 }
-      );
-    }
+      });
 
     // Persist any candidate evidence. transcriptTurnIds maps the model's
     // origin_user_turn_index back to a DB turn id.
@@ -312,16 +296,15 @@ export async function POST(
       updates.target_role_fit = agentOut.conclusion.target_role_fit;
       updates.residual_gap = agentOut.conclusion.residual_gap;
     }
-    await supabaseAdmin
-      .from("gap_investigations")
-      .update(updates)
-      .eq("id", investigation.id);
+    await persistAIRecords("investigation_update",{...updates,id:investigation.id});
 
     // Return the fresh bundle so the client has a single source of truth.
     const refreshed = await loadInvestigationBundle(investigation.id, user.id);
 
     return NextResponse.json({ success: true, data: refreshed });
+    });
   } catch (err: unknown) {
+    const limited=usageErrorResponse(err); if(limited)return limited;
     const msg =
       err instanceof Error ? err.message : "Failed to submit turn";
     console.error("[gap-investigations] turn POST error:", err);

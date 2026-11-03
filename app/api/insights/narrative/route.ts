@@ -1,3 +1,4 @@
+import { withAIUsage, aiResponse, usageErrorResponse, AIUsageError } from "@/lib/ai-usage/guard";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { resolveActiveCareerProfile } from "@/lib/db/career-profiles";
@@ -50,10 +51,10 @@ export async function GET() {
     const supabase = await createClient();
 
     const {
-      data: { user },
+      data: { user }, error:authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -132,13 +133,14 @@ export async function GET() {
       .update(JSON.stringify(inputPayload))
       .digest("hex");
 
-    const { data: cachedRow } = await supabase
+    const { data: cachedRow, error:cacheReadError } = await supabase
       .from("insight_narratives")
       .select("career_summary, coaching_insight, recommended_focus")
       .eq("user_id", user.id)
       .eq("source_hash", source_hash)
       .maybeSingle();
 
+    if(cacheReadError)throw new AIUsageError(503,"AI_CACHE_UNAVAILABLE",30);
     if (cachedRow) {
       return NextResponse.json({
         success: true,
@@ -151,7 +153,8 @@ export async function GET() {
       });
     }
 
-    const response = await openai.responses.create({
+    return await withAIUsage({userId:user.id,route:"insights",input:{profileId:activeProfile.id,source_hash}},async()=>{
+    const response = await aiResponse(openai,{
       model: "gpt-4.1",
       input: [
         {
@@ -212,20 +215,22 @@ Hard rules:
           },
         },
       },
-    });
+    },"insights");
 
     const parsed = JSON.parse(response.output_text);
 
     try {
-      await supabase.from("insight_narratives").insert({
+      const {error:cacheError}=await supabase.from("insight_narratives").insert({
         user_id: user.id,
         source_hash,
         career_summary: parsed.career_summary,
         coaching_insight: parsed.coaching_insight,
         recommended_focus: parsed.recommended_focus,
       });
+      if(cacheError)throw new AIUsageError(503,"AI_USAGE_UNAVAILABLE");
     } catch (insertErr) {
-      console.error("INSIGHTS NARRATIVE CACHE INSERT ERROR:", insertErr);
+      throw insertErr;
+
     }
 
     return NextResponse.json({
@@ -237,8 +242,16 @@ Hard rules:
       },
       cached: false,
     });
+    });
   } catch (err) {
+    const limited=usageErrorResponse(err); if(limited)return limited;
     console.error("INSIGHTS NARRATIVE ERROR:", err);
     return NextResponse.json({ success: false, error: "Failed to generate narrative" }, { status: 500 });
   }
+}
+
+// HEAD probes must never generate narratives.
+export async function HEAD(){
+  const client=await createClient();const {data:{user},error}=await client.auth.getUser();
+  return new Response(null,{status:error||!user?401:200,headers:{"Cache-Control":"private, no-store"}});
 }

@@ -1,3 +1,4 @@
+import { usageStoreDouble } from "./usage-store-double";
 /* eslint-disable @typescript-eslint/no-explicit-any -- Only network boundaries are doubled; production handlers and guards execute. */
 import assert from "node:assert/strict";
 import Module, { createRequire } from "node:module";
@@ -37,6 +38,7 @@ function query(table: string, admin = false) {
 const client: any = { auth: { getUser: async () => ({ data: { user }, error: null }) }, from: (table: string) => query(table) };
 const load = (Module as any)._load;
 (Module as any)._load = function(name: string, ...args: unknown[]) {
+  if (/(?:ai-usage\/|\.\/)store\.server(?:\.ts)?$/.test(name)) return usageStoreDouble(()=>client);
   if (name === "server-only") return {};
   if (/lib\/supabase\/server(?:\.ts)?$/.test(name)) return { createClient: async () => client };
   if (/lib\/supabase\/admin(?:\.ts)?$/.test(name)) return { supabaseAdmin: {
@@ -51,6 +53,7 @@ const load = (Module as any)._load;
     responses = { create: async (input: any) => { generations.push(input); return { output_text: JSON.stringify(parsed) }; } };
   };
   if (/gap-investigation\/agent(?:\.ts)?$/.test(name)) return {
+    assertAgentInputSize:()=>{},
     AGENT_MODEL_NAME: "fixture",
     uploadResumeFileForInvestigation: async ({ blob }: any) => { uploads.push(await blob.text()); return "file-test"; },
     runAgentTurn: async (input: any) => { generations.push(input); return { action: "ask_question", next_question: "What did you own?", candidate_evidence: [] }; },

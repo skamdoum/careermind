@@ -10,6 +10,7 @@
   "eval": "tsx scripts/eval/run.ts",
   "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
   "eval:rescore": "tsx scripts/eval/rescore.ts",
+  "test:ai-usage": "node --import tsx --test scripts/tests/ai-usage.test.ts",
   "test:resume-access": "node --import tsx --test scripts/tests/resume-access.test.ts",
   "test:compare": "node --import tsx --test scripts/tests/compare.test.ts",
   "test:compare:live": "node --import tsx scripts/tests/compare.live.ts",

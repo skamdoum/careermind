@@ -1,11 +1,12 @@
+import { withAIUsage, usageCheckpoint, persistAIRecords, usageErrorResponse, readAIInput } from "@/lib/ai-usage/guard";
 import { downloadOwnedResume } from "@/lib/resumes/download.server";
 import { ResumeAccessError } from "@/lib/resumes/authorization";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { existingActiveProfile, readSavedInvestigations, investigationsForGap, hasInitialAssistantTurn, INITIALIZATION_ERROR } from "@/lib/gap-investigation/saved";
 import {
   AGENT_MODEL_NAME,
+  assertAgentInputSize,
   runAgentTurn,
   uploadResumeFileForInvestigation,
 } from "@/lib/gap-investigation/agent";
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
     const profileId = await existingActiveProfile(supabase, user.id);
     if (!profileId) return NextResponse.json({ success: false, error: "Select an existing job search first." }, { status: 409 });
 
-    const body = await req.json().catch(() => ({}));
+    const body = await readAIInput(req);
     const gapId =
       typeof body?.gap_id === "string" ? body.gap_id.trim() : "";
     if (!gapId) {
@@ -101,9 +102,13 @@ export async function POST(req: Request) {
       );
     }
 
+    const preexisting = investigationsForGap(await readSavedInvestigations(supabase,user.id,profileId,analysis.id),seedGap.id).primary;
+    if(preexisting && await hasInitialAssistantTurn(supabase,user.id,preexisting.id)) return NextResponse.json({success:true,data:{investigation_id:preexisting.id}});
+    return await withAIUsage({userId:user.id,route:"kickoff",request:req,input:{gapId,analysisId:analysis.id,profileId}},async()=>{
     // Reuse before storage downloads, uploads, inserts or agent work.
     // This read-before-insert check is NOT an atomic cross-instance claim.
-    const saved = await readSavedInvestigations(supabase, user.id, profileId, analysis.id);
+    const alreadyCreated = await usageCheckpoint("originalSaved", async()=>readSavedInvestigations(supabase,user.id,profileId,analysis.id));
+    const saved = alreadyCreated;
     const { primary } = investigationsForGap(saved, seedGap.id);
     if (primary) {
       if (!await hasInitialAssistantTurn(supabase, user.id, primary.id)) {
@@ -219,6 +224,7 @@ export async function POST(req: Request) {
       },
     };
 
+    assertAgentInputSize({context:contextSnapshot,transcript:[],evidence:[],turn_count:0,openai_resume_file_id:null,is_kickoff:true,prior_dimension_coverage:null,prior_decision_state:null});
     // Upload the resume file to OpenAI ONCE at kickoff. Reused on every
     // subsequent turn via the file_id cached on the investigation row.
     let openaiResumeFileId: string | null = null;
@@ -232,9 +238,7 @@ export async function POST(req: Request) {
     }
 
     // Create the investigation row with the frozen context snapshot.
-    const { data: created, error: createErr } = await supabaseAdmin
-      .from("gap_investigations")
-      .insert({
+    const created = await persistAIRecords<{id:string}>("investigation",{
         user_id: user.id,
         career_profile_id: profileId,
         seed_gap_id: seedGap.id,
@@ -245,19 +249,7 @@ export async function POST(req: Request) {
         model_name: AGENT_MODEL_NAME,
         openai_resume_file_id: openaiResumeFileId,
         turn_count: 0,
-      })
-      .select()
-      .single();
-
-    if (createErr || !created) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: createErr?.message || "Failed to create investigation",
-        },
-        { status: 500 }
-      );
-    }
+      });
 
     // Run the kickoff agent turn — reads the resume, extracts initial
     // resume-source evidence, produces the opening question.
@@ -290,28 +282,14 @@ export async function POST(req: Request) {
         ? agentOut.next_question
         : agentOut.conclusion?.summary || "(investigation concluded)";
 
-    const { data: firstTurn, error: turnErr } = await supabaseAdmin
-      .from("gap_investigation_turns")
-      .insert({
+    await persistAIRecords<{id:string}>("assistant_turn",{
         investigation_id: created.id,
         user_id: user.id,
         role: "assistant",
         content: assistantContent,
         structured: agentOut,
         turn_index: 0,
-      })
-      .select()
-      .single();
-
-    if (turnErr || !firstTurn) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: turnErr?.message || "Failed to persist first turn",
-        },
-        { status: 500 }
-      );
-    }
+      });
 
     // Persist any kickoff evidence (typically source_type = "resume").
     // Kickoff transcript is empty from the model's POV; only the assistant
@@ -326,9 +304,7 @@ export async function POST(req: Request) {
 
     // If the agent stopped on kickoff (unusual but permitted), transition.
     if (agentOut.action === "stop_and_conclude") {
-      await supabaseAdmin
-        .from("gap_investigations")
-        .update({
+      await persistAIRecords("investigation_update",{id:created.id,
           status: "concluded",
           conclusion: agentOut.conclusion.classification,
           conclusion_summary: agentOut.conclusion.summary,
@@ -338,8 +314,7 @@ export async function POST(req: Request) {
           target_role_fit: agentOut.conclusion.target_role_fit,
           residual_gap: agentOut.conclusion.residual_gap,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", created.id);
+        });
     }
 
     return NextResponse.json({
@@ -348,7 +323,9 @@ export async function POST(req: Request) {
         investigation_id: created.id,
       },
     });
+    });
   } catch (err: unknown) {
+    const limited=usageErrorResponse(err); if(limited)return limited;
     if (err instanceof ResumeAccessError) return NextResponse.json({ success: false, error: err.message }, { status: err.status });
     const msg =
       err instanceof Error ? err.message : "Failed to start investigation";

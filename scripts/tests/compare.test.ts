@@ -1,3 +1,4 @@
+import { usageStoreDouble } from "./usage-store-double";
 /* eslint-disable @typescript-eslint/no-explicit-any -- Doubles replace network boundaries only; the production route and helpers run unchanged. */
 import assert from "node:assert/strict";
 import Module, { createRequire } from "node:module";
@@ -15,6 +16,7 @@ let reads: Array<{ table: string; filters: Record<string, unknown> }>;
 let storageFailure: boolean, providerFailure: boolean;
 const load = (Module as any)._load;
 (Module as any)._load = function(name: string, ...args: unknown[]) {
+  if (/(?:ai-usage\/|\.\/)store\.server(?:\.ts)?$/.test(name)) return usageStoreDouble(()=>client);
   if (name === "server-only") return {};
   if (/lib\/supabase\/server(?:\.ts)?$/.test(name)) return { createClient: async () => client };
   if (/lib\/supabase\/admin(?:\.ts)?$/.test(name)) return { supabaseAdmin: { storage: { from: (bucket: string) => {

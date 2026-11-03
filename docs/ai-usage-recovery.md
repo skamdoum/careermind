@@ -117,3 +117,54 @@ separate approval before enabling generation again.
 If any invariant fails, roll back the entire repair and keep generation paused.
 Do not zero buckets, delete uncertain operations, assume the daily reset clears a
 hold, or restore unguarded application code as a recovery shortcut.
+
+## Reconcile application estimates with OpenAI project usage
+
+Use existing authorized provider usage access; do not generate new AI work to
+investigate an incident. Compare the dedicated CareerMind OpenAI project with
+application budget buckets over the corresponding UTC period. Retain an external,
+restricted reconciliation record: period, project, aggregate estimated spend,
+reserved allowance, provider totals and explained differences; no candidate data.
+
+Application `spent` uses the reviewed conservative uncached GPT-4.1 token prices;
+`reserved` is pending maximum exposure, not an invoice charge. Known usage is
+attributed to the operation's admission day, which can differ from the provider's
+execution/billing day. Compare adjacent days when calls cross midnight. Include
+provider reporting delay, cached-input discounts, pricing/model changes,
+pre-deployment/in-flight work, other project keys, evaluations/scripts and any
+non-inference fees when explaining differences. The application $10 admission
+budget is not a guaranteed provider billing cap. Aggregate agreement alone does
+not establish the outcome of one missing response.
+
+Correlate saved request/response IDs and the opaque client trace with authoritative
+provider evidence for every uncertain call. Do not fabricate receipts or modify
+historical buckets merely to force totals to agree. If provider access or reliable
+outcome evidence is missing, document the limitation and retain conservative
+reservations and concurrency holds until reconciled. Use the reviewed locked,
+fenced, atomic repair procedure above; never settle a receipt twice. Provider
+usage reconciliation and real receipt recovery have not been verified live.
+
+## Database restoration is not an accounting or Storage rollback
+
+The inspected physical backup completed on 2026-11-03 at 09:48:33 UTC; PITR was
+disabled. Recheck current backup/retention/restore access for each incident.
+Restoration has not been rehearsed. It requires a separately approved recovery
+plan covering downtime and the backup recovery point; do not execute it as an
+automatic response to a stuck AI operation.
+
+Restoring a database can rewind operation fingerprints, checkpoints, settled
+spend and reservations while already billed OpenAI requests remain billed. It
+can lose deduplication history and permit a retry to generate again. Do not assume
+an earlier disabled flag survives restoration. Under an approved restore plan,
+prevent new AI work through restoration, verify the restored flag is disabled
+before reopening generation, and preserve restricted incident/receipt evidence
+outside the database being restored. Reconcile post-backup provider work and any
+in-flight outcomes before deciding which accounting/application repairs are
+needed. Never blindly replay operations or enable generation to test restoration.
+
+Database backups include database state such as Auth and Storage metadata; they
+**do not include original Storage object bytes**, including uploaded resumes.
+Restored metadata may therefore disagree with existing Storage objects. A separate
+Storage backup/recovery strategy is required. Do not download existing users'
+resumes or recreate/delete objects as part of ledger reconciliation. Restoration,
+Storage recovery and any application-data repair require separate owner approval.

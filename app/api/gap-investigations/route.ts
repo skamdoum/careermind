@@ -1,3 +1,5 @@
+import { downloadOwnedResume } from "@/lib/resumes/download.server";
+import { ResumeAccessError } from "@/lib/resumes/authorization";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -145,20 +147,22 @@ export async function POST(req: Request) {
     } | null = null;
 
     if (analysis.resume_id) {
-      const { data: r } = await supabase
+      const { data: r, error: resumeError } = await supabase
         .from("resumes")
         .select("id, file_path, file_name, mime_type")
         .eq("id", analysis.resume_id)
         .eq("user_id", user.id)
         .eq("career_profile_id", profileId)
         .maybeSingle();
+      if (resumeError) throw new ResumeAccessError(503, "Could not load resume");
       if (r) resumeRow = r;
     }
 
     // Fall back to the newest resume for this profile if the analysis
     // pre-dated resume_id (older rows).
-    if (!resumeRow) {
-      const { data: r } = await supabase
+    if (analysis.resume_id && !resumeRow) throw new ResumeAccessError(404, "Resume not found in the active career profile");
+    if (!analysis.resume_id) {
+      const { data: r, error: resumeError } = await supabase
         .from("resumes")
         .select("id, file_path, file_name, mime_type")
         .eq("user_id", user.id)
@@ -166,6 +170,7 @@ export async function POST(req: Request) {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (resumeError) throw new ResumeAccessError(503, "Could not load resume");
       if (r) resumeRow = r;
     }
 
@@ -218,19 +223,11 @@ export async function POST(req: Request) {
     // subsequent turn via the file_id cached on the investigation row.
     let openaiResumeFileId: string | null = null;
     if (resumeRow) {
-      const { data: fileData, error: dlErr } = await supabaseAdmin.storage
-        .from("resumes")
-        .download(resumeRow.file_path);
-      if (dlErr) {
-        return NextResponse.json(
-          { success: false, error: `Resume download failed: ${dlErr.message}` },
-          { status: 500 }
-        );
-      }
+      const { resume, file } = await downloadOwnedResume(supabase, user.id, profileId, resumeRow.id);
       openaiResumeFileId = await uploadResumeFileForInvestigation({
-        blob: fileData,
-        fileName: resumeRow.file_name || "resume.pdf",
-        mimeType: resumeRow.mime_type || "application/octet-stream",
+        blob: file,
+        fileName: resume.file_name || "resume.pdf",
+        mimeType: resume.mime_type || "application/octet-stream",
       });
     }
 
@@ -352,6 +349,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (err: unknown) {
+    if (err instanceof ResumeAccessError) return NextResponse.json({ success: false, error: err.message }, { status: err.status });
     const msg =
       err instanceof Error ? err.message : "Failed to start investigation";
     console.error("[gap-investigations] POST error:", err);

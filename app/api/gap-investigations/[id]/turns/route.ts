@@ -1,3 +1,6 @@
+import { existingActiveProfile } from "@/lib/gap-investigation/saved";
+import { ResumeSourceError, frozenResumeText, publicInvestigationBundle } from "@/lib/resumes/source.server";
+import { ResumeAccessError } from "@/lib/resumes/authorization";
 import type { GapInvestigationTurnRow } from "@/lib/db/gap-investigations";
 import { withAIUsage, usageCheckpoint, persistAIRecords, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
 import { NextResponse } from "next/server";
@@ -45,7 +48,8 @@ export async function POST(
       );
     }
 
-    const liveBundle = await loadInvestigationBundle(id, user.id);
+    const profileId = await existingActiveProfile(supabase, user.id);
+    const liveBundle = profileId ? await loadInvestigationBundle(id, user.id, profileId) : null;
     if (!liveBundle) {
       return NextResponse.json(
         { success: false, error: "Investigation not found" },
@@ -53,6 +57,7 @@ export async function POST(
       );
     }
 
+    frozenResumeText(liveBundle.investigation.context_snapshot, liveBundle.investigation.openai_resume_file_id);
     if(content.length>8000)throw new AIUsageError(413,"AI_INPUT_TOO_LARGE");
     return await withAIUsage({userId:user.id,route:"turn",request:req,input:{id,content,parent:body.parent_turn_id ?? (req.headers.has("Idempotency-Key") ? null : liveBundle.turns.at(-1)?.id)}},async()=>{
     const bundle=await usageCheckpoint("turnContext",async()=>{
@@ -299,15 +304,16 @@ export async function POST(
     await persistAIRecords("investigation_update",{...updates,id:investigation.id});
 
     // Return the fresh bundle so the client has a single source of truth.
-    const refreshed = await loadInvestigationBundle(investigation.id, user.id);
+    const refreshed = await loadInvestigationBundle(investigation.id, user.id, profileId!);
 
-    return NextResponse.json({ success: true, data: refreshed });
+    return NextResponse.json({ success: true, data: refreshed ? publicInvestigationBundle(refreshed) : null });
     });
   } catch (err: unknown) {
     const limited=usageErrorResponse(err); if(limited)return limited;
     const msg =
       err instanceof Error ? err.message : "Failed to submit turn";
-    console.error("[gap-investigations] turn POST error:", err);
+    if (err instanceof ResumeAccessError || err instanceof ResumeSourceError) return NextResponse.json({ success: false, error: err.message }, { status: err.status });
+    console.error("[gap-investigations] turn POST failed");
     return NextResponse.json(
       { success: false, error: msg },
       { status: 500 }

@@ -1,3 +1,4 @@
+import type { ResumeSource } from "@/lib/resumes/source.server";
 import { providerContext } from "@/lib/ai-usage/provider";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -165,6 +166,8 @@ export type InvestigationContextSnapshot = {
   resume: {
     id: string | null;
     file_name: string | null;
+    // Private original source; strip before public serialization. Absent on legacy sessions.
+    source?: ResumeSource;
   };
 };
 

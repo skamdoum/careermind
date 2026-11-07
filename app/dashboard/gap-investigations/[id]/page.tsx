@@ -1,3 +1,4 @@
+import { publicInvestigationBundle } from "@/lib/resumes/source.server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -58,6 +59,7 @@ export default async function GapInvestigationPage({ params }: PageProps) {
     );
   }
 
+  bundle = publicInvestigationBundle(bundle);
   const { investigation } = bundle;
   const gap = investigation.context_snapshot?.gap;
   const target = investigation.context_snapshot?.target;

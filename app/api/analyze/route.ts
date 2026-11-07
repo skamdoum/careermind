@@ -1,4 +1,6 @@
-import { withAIUsage, aiResponse, aiFile, persistAIRecords, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
+import { providerContext } from "@/lib/ai-usage/provider";
+import { ResumeSourceError, RESUME_SOURCE_KEY, publicAnalysisJson, storedSource, textSource, verifyStoredSource, sourceError } from "@/lib/resumes/source.server";
+import { withAIUsage, aiResponse, aiFile, persistAIRecords, usageCheckpoint, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
 import { downloadOwnedResume } from "@/lib/resumes/download.server";
 import { ResumeAccessError } from "@/lib/resumes/authorization";
 import OpenAI from "openai";
@@ -259,9 +261,18 @@ export async function POST(req: Request) {
     const resumeContentParts: any[] = [];
     let debugOpenAiFileId: string | null = null;
 
+    let resumeSource;
     if (resolvedResume) {
       const { resume, file } = await downloadOwnedResume(supabase, user.id, activeProfileId, resolvedResume.id);
       resolvedResume = resume as ResumeRow;
+      resumeSource = await usageCheckpoint("resumeSource", () => {
+        // A pre-provenance operation may already reference an older uploaded
+        // file/response. Today's download cannot establish those original bytes.
+        const steps = providerContext.getStore()?.op.steps ?? {};
+        if (["file:0", "response:0", "persist:analysis"].some(key => Object.hasOwn(steps, key))) throw sourceError();
+        return storedSource(resume.id, file);
+      });
+      await verifyStoredSource(resumeSource, file);
       const openaiFile = await aiFile(openai, file);
 
       debugOpenAiFileId = openaiFile.id;
@@ -276,6 +287,7 @@ export async function POST(req: Request) {
     // resume file was loaded. Never send both — stale pasted text alongside
     // a fresh uploaded file could contaminate evidence grounding.
     if (resumeContentParts.length === 0 && resumeText) {
+      resumeSource = textSource(resumeText);
       resumeContentParts.push({
         type: "input_text",
         text: `RESUME TEXT:\n${resumeText}`,
@@ -902,7 +914,7 @@ Return only valid JSON.`,
     }, "analysis");
 
     const content = response.output_text;
-    const parsed = JSON.parse(content);
+    const parsed = publicAnalysisJson(JSON.parse(content));
 
     // TODO(v2.3): Compute core_verdict deterministically from
     // parsed.role_requirements (gating + high-importance assessments) rather
@@ -913,7 +925,7 @@ Return only valid JSON.`,
     // added. Deferred to V2.3 pending V2.2 regression measurement.
 
     const analysisRecord = {
-      analysis_type:"initial_onboarding", model_name:"gpt-4.1", raw_json:parsed,
+      analysis_type:"initial_onboarding", model_name:"gpt-4.1", raw_json:{ ...parsed, [RESUME_SOURCE_KEY]: resumeSource },
       summary:parsed.positioning_summary, status:"completed", career_profile_id:activeProfileId,
       career_goal_id:career_goal_id ?? null, job_description_id:job_description_id ?? null,
       resume_id:resolvedResume?.id ?? null,
@@ -1044,8 +1056,8 @@ signalRows = parsed.signals.map((s: any) => ({
     });
   } catch (error: any) {
     const limited = usageErrorResponse(error); if(limited) return limited;
-    if (error instanceof ResumeAccessError) return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    console.error("Analyze API error:", error);
+    if (error instanceof ResumeAccessError || error instanceof ResumeSourceError) return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    console.error("Analyze API failed");
 
     return NextResponse.json(
       {

@@ -1,4 +1,5 @@
-import { ResumeSourceError, RESUME_SOURCE_KEY, publicAnalysisJson, storedSource, textSource, verifyStoredSource } from "@/lib/resumes/source.server";
+import { providerContext } from "@/lib/ai-usage/provider";
+import { ResumeSourceError, RESUME_SOURCE_KEY, publicAnalysisJson, storedSource, textSource, verifyStoredSource, sourceError } from "@/lib/resumes/source.server";
 import { withAIUsage, aiResponse, aiFile, persistAIRecords, usageCheckpoint, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
 import { downloadOwnedResume } from "@/lib/resumes/download.server";
 import { ResumeAccessError } from "@/lib/resumes/authorization";
@@ -264,7 +265,13 @@ export async function POST(req: Request) {
     if (resolvedResume) {
       const { resume, file } = await downloadOwnedResume(supabase, user.id, activeProfileId, resolvedResume.id);
       resolvedResume = resume as ResumeRow;
-      resumeSource = await usageCheckpoint("resumeSource", () => storedSource(resume.id, file));
+      resumeSource = await usageCheckpoint("resumeSource", () => {
+        // A pre-provenance operation may already reference an older uploaded
+        // file/response. Today's download cannot establish those original bytes.
+        const steps = providerContext.getStore()?.op.steps ?? {};
+        if (["file:0", "response:0", "persist:analysis"].some(key => Object.hasOwn(steps, key))) throw sourceError();
+        return storedSource(resume.id, file);
+      });
       await verifyStoredSource(resumeSource, file);
       const openaiFile = await aiFile(openai, file);
 

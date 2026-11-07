@@ -44,6 +44,18 @@ hash is checkpointed through the existing guard so persistence recovery cannot
 silently associate a returned analysis with changed file bytes. Hash mismatch on
 recovery fails closed instead of attaching new content to old model output.
 
+An unfinished operation created before this source checkpoint existed can already
+contain `file:0`, `response:0` or `persist:analysis`. Analyze must not create a new
+source hash from today's bytes for that operation: the existing upload/response
+may refer to older bytes. Recovery now rejects such source-less stored operations
+with 409 before another upload/generation or source checkpoint write. This also
+blocks upload-only recovery even before a response exists. Completed response
+replay still returns before the work callback, unchanged. New operations save
+source identity before file upload; unchanged-source persistence recovery reuses
+the existing output and quota, while changed bytes fail closed. Pasted-text
+recovery uses the identical request text bound by the guard fingerprint and has
+no stored-file substitution.
+
 ## Frozen context and privacy
 
 New investigations freeze source identity in `context_snapshot.resume.source`.
@@ -107,7 +119,7 @@ presented as real model quality or hosted integration evidence.
 - Resume-source validator/privacy/real agent-input tests: 14 passed.
 - Resume-access handler/security regressions: 74 passed.
 - Investigation navigation/reopening/API and SSR privacy: 48 passed.
-- Actual usage/persistence/replay SQL on disposable PostgreSQL 17.6: 78 passed.
+- Actual usage/persistence/replay SQL on disposable PostgreSQL 17.6: 83 passed.
 - Compare: 59; Storage policy SQL on disposable PostgreSQL 17.6: 17;
   Action Plans: 14; analysis metadata: 19; recommendation validation: 49 passed.
 - Standalone agent import smoke check and 15 deterministic evaluation-metric
@@ -123,3 +135,40 @@ Rollback to old application code reintroduces latest-resume substitution; do not
 use that as a silent fallback. Any emergency flag pause requires owner approval.
 Existing usage receipts, saved investigations and source snapshots must survive
 rollback; do not delete or backfill records to make old code work.
+
+## Focused merge-readiness exposure and retention audit (2026-11-07)
+
+| Reader or copy | Exposure and retention |
+|---|---|
+| Analyze response and completed replay | `result` contains the model analysis without the reserved source envelope. Analyze stores original pasted text in analysis JSONB; stored-file source metadata is also saved in the private `resumeSource` checkpoint for recovery. |
+| Target-job analysis API | `getAnalysesForTargetJob` removes the envelope before returning rows. |
+| History and analysis detail pages | Server readers may load raw JSON; history passes only ID/summary/date/verdict to its client. Detail rendering uses explicit result fields. |
+| Investigation GET, turn response and initial client props | Source stripped from `context_snapshot.resume`; server-side agent/recovery retains it. |
+| Insights, Strategy, Progress and Action Plan recommendation | Explicit field projections/assembled payloads; no wholesale source envelope sent to these models or returned. Evidence excerpts may legitimately contain candidate text. |
+| Direct owner database reads | Existing SELECT RLS authorizes the record owner, not just the active profile. Owners can read their own complete JSONB via Supabase. Other users cannot. Sanitizers are application output controls, not a server-secret vault or database column ACL. |
+| Private usage operations | Kickoff's `persist:investigation` checkpoint holds the inserted context; follow-up `turnContext` holds the frozen source. Browser roles cannot read this ledger. Completed/failed records older than 24 hours are deleted opportunistically on a later claim, not on a timer. Unresolved records are outside terminal pruning; provably undispatched abandoned claims may be released on later claims, but uncertain holds require reconciliation and have no automatic deletion deadline. |
+| Existing goal/job deletion | Removes the goal/job; analysis foreign keys become null. Analysis JSONB and investigation source remain. This is not resume erasure. |
+| Analysis deletion | No application analysis-delete endpoint was found; the inspected fixture has owner SELECT/INSERT policies but no DELETE policy despite table DELETE grants. A privileged deletion nulls investigation seed IDs and preserves the frozen source. |
+| Career-profile deletion | No application profile-delete endpoint was found. Database FK behavior deletes that profile's investigations but sets analysis profile references null, retaining analysis JSONB. |
+| Auth-account deletion | No application account-delete endpoint was found. FK cascades remove application analyses/investigations, but usage operations have no user FK and private recovery copies can remain. Do not claim account deletion fully purges source copies. |
+| Backups and provider files | Database backups can retain source JSON beyond row deletion. No application provider-file deletion was found; external provider retention was not independently verified. These are not cleared by deleting an analysis. |
+
+The original reviewed commit had a confirmed stored-source recovery defect,
+reproduced deterministically for both legacy checkpoint layouts (HTTP 200 rather
+than required 409). The Analyze-only correction closes it without altering guard
+SQL or accounting policy. No additional ordinary API disclosure was confirmed.
+The ownership and retention behavior above is an existing access/lifecycle
+limitation made more sensitive by durable full text; it is documented explicitly,
+not silently changed into a new privacy or deletion subsystem. Hosted schema drift,
+external backups and provider-side retention were not reverified during this
+local-only review.
+
+Focused review validation: the two new legacy-checkpoint regressions fail on
+`4ca149b` with HTTP 200 instead of 409. After the correction, all 83 disposable
+PostgreSQL 17.6 usage/persistence tests pass, including both layouts, changed-byte
+recovery rejection, unchanged-byte recovery, completed replay after a file change,
+legacy text recovery, and owner/deletion/ledger-retention evidence. The 14 source,
+74 resume-access and 48 navigation/privacy tests also pass (219 affected tests).
+TypeScript and the local production build pass. Test-file lint passes; Analyze
+retains the same baseline five no-explicit-any errors and one unused-variable
+warning. No shared-database changes or paid provider calls were made.

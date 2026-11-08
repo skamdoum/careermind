@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     })();
     if (ownedFile) await verifyStoredSource(resumeSource, ownedFile.file);
     const resumeRow = ownedFile?.resume ?? null;
-    return await withAIUsage({userId:user.id,route:"kickoff",request:req,input:{gapId,analysisId:analysis.id,profileId,sourceKind:resumeSource.kind,sourceHash:resumeSource.sha256}},async()=>{
+    return await withAIUsage({userId:user.id,route:"kickoff",request:req,telemetry:{analysis_id:analysis.id},input:{gapId,analysisId:analysis.id,profileId,sourceKind:resumeSource.kind,sourceHash:resumeSource.sha256}},async()=>{
     // Reuse before provider uploads, inserts or agent work; source preflight is above.
     // This read-before-insert check is NOT an atomic cross-instance claim.
     const alreadyCreated = await usageCheckpoint("originalSaved", async()=>readSavedInvestigations(supabase,user.id,profileId,analysis.id));

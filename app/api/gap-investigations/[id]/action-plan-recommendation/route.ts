@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     // Body-supplied plan IDs, evidence, status and profile IDs are never accepted.
     const input = await readSeedPlan(client, user.id, id);
-    return await withAIUsage({userId:user.id,route:"recommendation",request,input},async()=>{
+    return await withAIUsage({userId:user.id,route:"recommendation",request,telemetry:{investigation_id:id,analysis_id:input.seed_analysis_id},input},async()=>{
     const recommendation = await evaluatePlanRecommendation(input);
     const fresh = await readSeedPlan(client, user.id, id);
     const freshHash = createHash("sha256").update(JSON.stringify(fresh)).digest("hex");

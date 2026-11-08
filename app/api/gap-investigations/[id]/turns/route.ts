@@ -59,7 +59,7 @@ export async function POST(
 
     frozenResumeText(liveBundle.investigation.context_snapshot, liveBundle.investigation.openai_resume_file_id);
     if(content.length>8000)throw new AIUsageError(413,"AI_INPUT_TOO_LARGE");
-    return await withAIUsage({userId:user.id,route:"turn",request:req,input:{id,content,parent:body.parent_turn_id ?? (req.headers.has("Idempotency-Key") ? null : liveBundle.turns.at(-1)?.id)}},async()=>{
+    return await withAIUsage({userId:user.id,route:"turn",request:req,telemetry:{investigation_id:id,analysis_id:liveBundle.investigation.seed_analysis_id ?? undefined},input:{id,content,parent:body.parent_turn_id ?? (req.headers.has("Idempotency-Key") ? null : liveBundle.turns.at(-1)?.id)}},async()=>{
     const bundle=await usageCheckpoint("turnContext",async()=>{
       if(Buffer.byteLength(JSON.stringify(liveBundle),"utf8")>480*1024)throw new AIUsageError(413,"AI_CONTEXT_TOO_LARGE");
       return liveBundle;

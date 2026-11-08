@@ -1,6 +1,7 @@
 -- Operator-only read queries. telemetry requires the separately approved migration.
 -- Business records share a database across environments; those totals are NOT
--- environment-isolated. Exclude known synthetic/test account IDs when reporting beta.
+-- environment-isolated. Queries other than the cohort report below are not
+-- external-beta-only; apply the same verified cohort when reporting beta totals.
 
 -- Registrations (registered accounts, not anonymous Auth accounts).
 select date_trunc('week',created_at at time zone 'UTC') as week,count(*) as registrations
@@ -15,15 +16,27 @@ select user_id,min(created_at) as first_completed_analysis,count(*) as completed
 from public.analyses where status='completed' group by user_id;
 
 -- Weekly active users = persisted activity, NOT visits, logins or authenticated sessions.
+-- Populate both UUID lists from the operator's verified cohort before reporting.
+-- Unlisted users stay unclassified; internal/test wins if the lists overlap.
+-- Only telemetry is Production-filtered. Shared business records can include
+-- Preview/dev activity even for external beta accounts.
 -- Task updated_at may equal creation, so exclude generated/untouched task rows.
-with activity as (
+with cohorts as (
+  select array[]::uuid[] as external_beta_ids,
+         array[]::uuid[] as internal_test_ids
+), activity as (
   select user_id,created_at as at from public.analyses where status='completed'
   union all select user_id,created_at from public.gap_investigation_turns where role='user'
   union all select user_id,updated_at from public.plan_tasks where status in ('in_progress','done') and updated_at>created_at
   union all select user_id,created_at from public.telemetry_events where environment='production'
 )
-select date_trunc('week',at at time zone 'UTC') as week,count(distinct user_id) as active_users
-from activity group by 1 order by 1;
+select date_trunc('week',at at time zone 'UTC') as week,
+  count(distinct user_id) filter(where user_id = any(external_beta_ids)
+    and not (user_id = any(internal_test_ids))) as external_beta_active_users,
+  count(distinct user_id) filter(where user_id = any(internal_test_ids)) as internal_test_active_users,
+  count(distinct user_id) filter(where not (user_id = any(external_beta_ids))
+    and not (user_id = any(internal_test_ids))) as unclassified_active_users
+from activity cross join cohorts group by 1 order by 1;
 
 -- An active row can precede a failed kickoff: count initialized sessions separately.
 select i.status,count(*) as records,

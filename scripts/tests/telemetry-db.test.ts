@@ -66,3 +66,23 @@ test("existing guard pruning deletes an old operation without deleting telemetry
   assert.equal(sql("select count(*) from public.ai_usage_operations"), "0");
   assert.equal(sql("select count(*) from public.telemetry_events"), "1");
 });
+test("weekly report separates verified cohorts and filters only telemetry by environment", () => {
+  const [beta, internal, unclassified, previewOnly] = Array.from({ length: 4 }, () => randomUUID());
+  const report = readFileSync("docs/beta-telemetry.sql", "utf8").match(/with cohorts as \([\s\S]+?;/)?.[0];
+  assert.ok(report);
+  const configured = report
+    .replace("array[]::uuid[] as external_beta_ids", `array['${beta}','${internal}','${previewOnly}']::uuid[] as external_beta_ids`)
+    .replace("array[]::uuid[] as internal_test_ids", `array['${internal}']::uuid[] as internal_test_ids`);
+  const activity = (user_id: string, environment: string) => insert({
+    ...event, user_id, environment, event_key: randomUUID(), operation_id: randomUUID(), provider_response_id: null,
+  });
+  const values = [beta, unclassified].map(id => `('${id}')`).join(",");
+  const actual = sql(`begin;delete from public.telemetry_events;
+    insert into auth.users(id)values${values};
+    insert into public.profiles(id)values${values};
+    insert into public.analyses(user_id,analysis_type,raw_json)
+      select id,'initial_onboarding','{}'::jsonb from public.profiles where id in ('${beta}','${unclassified}');
+    ${activity(beta, "production")};${activity(internal, "production")};${activity(previewOnly, "preview")};
+    ${configured}rollback;`);
+  assert.deepEqual(actual.split("|").slice(1), ["1", "1", "1"]);
+});

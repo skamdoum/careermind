@@ -45,8 +45,9 @@ correlation update.
 
 Uniqueness on event key and `(operation_id,call_index)` prevents repeated writes
 from charging twice. Provider response ID is independently unique across
-environments; duplicate inserts never overwrite original cost. Completed guard
-replays, saved-investigation reuse and narrative cache hits do not dispatch and
+environments. Matching duplicate identities are ignored; conflicts log a fixed
+warning without receipt IDs or database error details. Neither overwrites the
+original cost. Completed guard replays, saved-investigation reuse and narrative cache hits do not dispatch and
 therefore do not produce new cost events. Standalone unmetered evaluation calls
 remain excluded. No historical workflow cost is recorded as new inference.
 
@@ -98,13 +99,21 @@ and should not be charged to every contributing analysis.
 
 `VERCEL_ENV` supplies production/preview/development; absent/unrecognized values
 are `unknown`, never guessed Production. No new environment variables are needed.
-Reports explicitly filter Production telemetry. Business tables share the same
-database and do not encode environment, so adoption reports include Preview/dev
-activity unless known test accounts are excluded. Weekly active users measure
-persisted activity, not page visits. Current task states are not transition history;
-an inactive investigation is not automatically abandoned. Exclude synthetic
-canary/test users from external-beta metrics. Application-wide estimates can have
-unknown/missing costs; always display coverage counts beside known sums.
+Reports filter telemetry to Production. Business tables share the same database
+and do not record the source environment. Even activity attributed to external
+beta accounts can include Preview or development activity from those accounts.
+Weekly active users measure persisted activity, not page visits, and are not a
+Production-only adoption metric.
+
+Before reporting weekly activity, fill the SQL query's two UUID lists from the
+verified external beta and internal/test account rosters (including synthetic
+canaries). The query reports these groups separately and counts unlisted accounts
+as unclassified. Internal/test takes precedence on overlap. Empty lists yield no
+classified users, so do not interpret the resulting beta zero as inactivity.
+Apply the same verified cohort to other reports before calling them beta metrics.
+Current task states are not transition history; inactivity does not establish
+that an investigation was abandoned. Show unknown or missing cost counts beside
+known estimated spend.
 
 ## Installation, retention and rollback
 

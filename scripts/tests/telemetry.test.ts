@@ -9,13 +9,25 @@ let writeFailure = false;
 const rows = new Map<string, any>();
 const admin = { from(table: string) {
   assert.equal(table, "telemetry_events");
-  return { upsert(row: any, options: any) {
-    assert.deepEqual(options, { onConflict: "event_key", ignoreDuplicates: true });
+  return { insert(row: any) {
     return { async abortSignal(signal: AbortSignal) {
       assert.ok(signal instanceof AbortSignal);
       if (writeFailure) throw new Error("private transport error must not escape");
-      if (!rows.has(row.event_key)) rows.set(row.event_key, row);
+      if (rows.has(row.event_key) || [...rows.values()].some(existing =>
+        row.provider_response_id !== null && existing.provider_response_id === row.provider_response_id)) {
+        return { error: { code: "23505", details: "private receipt details" } };
+      }
+      rows.set(row.event_key, row);
       return { error: null };
+    } };
+  }, select(columns: string) {
+    assert.equal(columns, "operation_id,call_index,user_id,provider_response_id");
+    return { eq(key: string, value: string) {
+      assert.equal(key, "event_key");
+      return { abortSignal(signal: AbortSignal) {
+        assert.ok(signal instanceof AbortSignal);
+        return { async maybeSingle() { return { data: rows.get(value) ?? null, error: null }; } };
+      } };
     } };
   }, update(changes: any) {
     const filters: Record<string, unknown> = {};
@@ -35,7 +47,7 @@ const original = (Module as any)._load;
   return original.call(this, name, ...args);
 };
 // Load the real store while only its network/client boundary is replaced.
-require("../../lib/ai-usage/telemetry-store.server.ts");
+const { insertProviderEvent } = require("../../lib/ai-usage/telemetry-store.server.ts");
 const { aiResponse, providerContext } = require("../../lib/ai-usage/provider.ts");
 const { persistAIRecords } = require("../../lib/ai-usage/guard.ts");
 (Module as any)._load = original;
@@ -44,6 +56,29 @@ const base = { operationId: "11111111-1111-4111-8111-111111111111", userId: "222
   route: "analysis" as const, latencyMs: 12.5, model: "gpt-4.1-2025-04-14", outcome: "success" as const };
 const receipt = { id: "resp_synthetic", model: base.model, status: "completed", output_text: "NOT VALID JSON",
   usage: { input_tokens: 1000, input_tokens_details: { cached_tokens: 400 }, output_tokens: 50 } };
+test("matching duplicate writes are quiet and keep the original measurement", async (t) => {
+  rows.clear();
+  const warning = t.mock.method(console, "warn", () => {});
+  for (const responseId of [receipt.id, undefined]) {
+    const event = providerEvent({ ...base, callIndex: rows.size, responseId, usage: receipt.usage });
+    await insertProviderEvent(event);
+    await insertProviderEvent({ ...event, latency_ms: 99 });
+    assert.deepEqual(rows.get(event.event_key), event);
+  }
+  assert.equal(rows.size, 2);
+  assert.equal(warning.mock.callCount(), 0);
+});
+test("receipt identity conflicts warn without leaking details or overwriting", async (t) => {
+  rows.clear();
+  const warning = t.mock.method(console, "warn", () => {});
+  const event = providerEvent({ ...base, responseId: receipt.id, usage: receipt.usage });
+  await insertProviderEvent(event);
+  await insertProviderEvent(providerEvent({ ...base, callIndex: 1, responseId: receipt.id }));
+  await insertProviderEvent({ ...event, provider_response_id: "resp_different" });
+  assert.deepEqual([...rows.values()], [event]);
+  assert.deepEqual(warning.mock.calls.map(call => call.arguments),
+    [["[telemetry] provider receipt identity conflict"], ["[telemetry] provider receipt identity conflict"]]);
+});
 function context(overrides = {}) {
   return { op: { id: base.operationId, owner: "fence", steps: {} }, call: 0, upload: 0, providerError: false,
     userId: base.userId, telemetry: { investigation_id: "33333333-3333-4333-8333-333333333333" }, step: async () => null, ...overrides };

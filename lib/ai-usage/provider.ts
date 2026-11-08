@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type OpenAI from "openai";
+import { recordProviderMeasurement, type TelemetryScope } from "./telemetry";
 export type Route = "analysis" | "compare" | "kickoff" | "turn" | "recommendation" | "insights" | "strategy";
 export type Operation = {
     id: string;
@@ -11,6 +12,8 @@ export type Context = {
     call: number;
     upload: number;
     providerError: boolean;
+    userId?: string;
+    telemetry?: TelemetryScope;
     step: (action: string, key: string, value?: unknown) => Promise<unknown>;
 };
 export const providerContext = new AsyncLocalStorage<Context>();
@@ -27,10 +30,12 @@ export async function aiResponse(client: OpenAI, params: OpenAI.Responses.Respon
         throw new AIUsageError(503, "AI_OPERATION_REQUIRED");
     if (!c)
         return client.responses.create({ ...params, max_output_tokens: outputCaps[route] }, { maxRetries: 0, timeout: 60000 });
+    const callIndex = c.call;
     const key = `response:${c.call++}`;
     if (Object.hasOwn(c.op.steps, key))
         return c.op.steps[key] as OpenAI.Responses.Response;
     await c.step("begin", key);
+    const started = performance.now();
     let response: OpenAI.Responses.Response;
     try {
         response = await client.responses.create({ ...params, max_output_tokens: outputCaps[route] }, { maxRetries: 0, timeout: 60000, headers: { "X-Client-Request-Id": `${c.op.id}-${key}` } });
@@ -40,6 +45,11 @@ export async function aiResponse(client: OpenAI, params: OpenAI.Responses.Respon
         const status = Number((error as {
             status?: number;
         })?.status);
+        if (c.userId) await recordProviderMeasurement({
+            operationId: c.op.id, callIndex, userId: c.userId, route, scope: c.telemetry,
+            latencyMs: performance.now() - started, model: params.model ?? "unknown",
+            outcome: [400, 401, 403, 404, 413, 422, 429].includes(status) ? "rejected" : "unknown",
+        });
         if ([400, 401, 403, 404, 413, 422, 429].includes(status)) {
             await c.step("rejected", key, { rejected: true, status });
             throw new AIUsageError(status === 429 ? 503 : status, status === 429 ? "AI_PROVIDER_LIMIT" : "AI_PROVIDER_REJECTED", status === 429 ? 30 : 0);
@@ -49,7 +59,18 @@ export async function aiResponse(client: OpenAI, params: OpenAI.Responses.Respon
     const saved = { request_id: (response as OpenAI.Responses.Response & {
             _request_id?: string;
         })._request_id, id: response.id, model: response.model, output_text: response.output_text, usage: response.usage };
-    await c.step("response", key, saved);
+    const latencyMs = performance.now() - started;
+    try {
+        await c.step("response", key, saved);
+    } finally {
+        // Preserve the provider measurement even if accounting persistence fails.
+        // Telemetry is never a reason to repeat the provider call.
+        if (c.userId) await recordProviderMeasurement({
+            operationId: c.op.id, callIndex, userId: c.userId, route, scope: c.telemetry,
+            latencyMs, model: response.model, responseId: response.id, usage: response.usage,
+            outcome: response.status && response.status !== "completed" ? "incomplete" : "success",
+        });
+    }
     return response;
 }
 export async function aiFile(client: OpenAI, file: File) {

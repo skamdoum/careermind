@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { usageRPC } from "./store.server";
 import { providerContext as context, AIUsageError } from "./provider";
 import type { Route, Operation } from "./provider";
+import { linkAnalysisMeasurement, type TelemetryScope } from "./telemetry";
 export { aiResponse, aiFile, AIUsageError } from "./provider";
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
 const usageMessages: Record<string, string> = {
@@ -39,6 +40,7 @@ export async function withAIUsage(options: {
     input: unknown;
     request?: Request;
     units?: number;
+    telemetry?: TelemetryScope;
 }, work: () => Promise<Response>): Promise<Response> {
     const supplied = options.request?.headers.get("Idempotency-Key");
     if (supplied && (supplied.length > 128 || !/^[A-Za-z0-9_-]+$/.test(supplied)))
@@ -60,7 +62,7 @@ export async function withAIUsage(options: {
     if (!claimed.operation)
         throw new AIUsageError(claimed.status ?? 503, claimed.code ?? "AI_USAGE_UNAVAILABLE", claimed.retry_after ?? 0);
     const op = claimed.operation;
-    return context.run({ op, call: 0, upload: 0, providerError: false, step }, async () => {
+    return context.run({ op, call: 0, upload: 0, providerError: false, step, userId: options.userId, telemetry: { ...options.telemetry } }, async () => {
         try {
             const response = await work();
             response.headers.set("Cache-Control", "private, no-store");
@@ -119,7 +121,11 @@ export async function persistAIRecords<T>(kind: string, data: unknown): Promise<
     const c = context.getStore();
     if (!c)
         throw new AIUsageError(503, "AI_OPERATION_REQUIRED");
-    return await rpc("ai_usage_persist", { p_id: c.op.id, p_owner: c.op.owner, p_kind: kind, p_data: data }) as T;
+    const result = await rpc("ai_usage_persist", { p_id: c.op.id, p_owner: c.op.owner, p_kind: kind, p_data: data }) as T;
+    const ids = result as { id?: string; analysisId?: string } | null;
+    if (kind === "investigation" && ids?.id) c.telemetry = { ...c.telemetry, investigation_id: ids.id };
+    if (kind === "analysis" && ids?.analysisId && c.userId) await linkAnalysisMeasurement(c.op.id, c.userId, ids.analysisId);
+    return result;
 }
 export function hasUsageContext() { return !!context.getStore(); }
 export async function readAIInput(req: Request): Promise<Record<string, unknown>> {

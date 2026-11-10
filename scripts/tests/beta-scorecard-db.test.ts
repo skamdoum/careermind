@@ -78,7 +78,8 @@ test("real report respects inclusive/exclusive local boundaries, cohort preceden
       ('${investigation}','${beta}','assistant',2,'{"action":"stop_and_conclude"}','private text',${inside});
     insert into public.telemetry_events(event_key,event_type,created_at,user_id,operation_id,call_index,analysis_id,investigation_id,
       environment,route,model,input_tokens,cached_input_tokens,output_tokens,pricing_version,estimated_cost_nanousd,latency_ms,outcome)values
-      ${call("analysis", beta, "analysis", start, "10", { analysis })},
+      ${call("analysis-a", beta, "analysis", start, "10", { analysis })},
+      ${call("analysis-b", beta, "analysis", inside, "15", { analysis })},
       ${call("kickoff", beta, "kickoff", inside, "20", { investigation })},
       ${call("turn", beta, "turn", inside, "null", { investigation, outcome: "unknown" })},
       ${call("compare-a", beta, "compare", inside, "30", { operation: compare })},
@@ -92,7 +93,9 @@ test("real report respects inclusive/exclusive local boundaries, cohort preceden
   const c = result.periods[1].cohorts;
   assert.deepEqual([c.external_beta.registrations, c.external_beta.active_users, c.external_beta.analyses, c.external_beta.returning_analysis_users], [1, 1, 1, 1]);
   assert.deepEqual([c.external_beta.initialized_investigations, c.external_beta.investigations_with_replies, c.external_beta.concluded_investigations], [1, 1, 1]);
-  assert.deepEqual([c.external_beta.calls, c.external_beta.known_spend_nanousd, c.external_beta.unknown_cost_calls, c.external_beta.unknown_outcome, c.external_beta.mean_latency_ms], [5, 100, 1, 1, 1000]);
+  // Both provider rows count toward cost but still represent one saved analysis.
+  assert.deepEqual(c.external_beta.workflows.analysis, { observed: 1, priced: 1, mean_cost_nanousd: 25 });
+  assert.deepEqual([c.external_beta.calls, c.external_beta.known_spend_nanousd, c.external_beta.unknown_cost_calls, c.external_beta.unknown_outcome, c.external_beta.mean_latency_ms], [6, 115, 1, 1, 1000]);
   assert.deepEqual(c.external_beta.workflows.compare, { observed: 1, priced: 1, mean_cost_nanousd: 70 });
   assert.deepEqual(c.external_beta.workflows.investigation, { observed: 1, priced: 0, mean_cost_nanousd: null });
   assert.equal(c.internal_test.registrations, 1);

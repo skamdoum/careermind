@@ -67,7 +67,7 @@ function fixture() {
   return {
     env, rows, requests, accepted, warnings, reports: () => reports,
     setTime(value: string) { time = new Date(value); },
-    failAcceptance() { failAcceptanceWrite = true; },
+    failAcceptance(value = true) { failAcceptanceWrite = value; },
     timeout(value: boolean) { timeout = value; },
     run: (body: unknown = { mode: "schedule" }, auth = secret) => handle(new Request("https://app.example.test", {
       method: "POST", headers: { authorization: `Bearer ${auth}` }, body: JSON.stringify(body),
@@ -153,4 +153,35 @@ test("acceptance write failure does not permit resend past the provider safe win
   f.setTime("2026-11-10T13:00:00Z");
   assert.equal((await (await f.run({ mode: "retry", week_start: week })).json()).result, "reconciliation_required");
   assert.equal(f.requests.length, 1);
+});
+test("accepted email with failed finalization is safely recovered after the lease", async () => {
+  const f = fixture();
+  f.failAcceptance();
+  const first = await f.run();
+  assert.equal(first.status, 503);
+  assert.equal((await first.json()).result, "scorecard_unavailable");
+  const frozen = structuredClone(f.rows.get(week));
+  assert.ok(frozen);
+  assert.equal(frozen.state, "sending");
+  assert.equal(f.requests.length, 1);
+  assert.deepEqual(JSON.parse(f.requests[0].body), frozen.payload);
+  const key = `careermind-beta-scorecard/${week}`;
+  assert.deepEqual([...f.accepted], [[key, f.requests[0].body]]);
+  assert.deepEqual(f.warnings, [{ event: "beta_scorecard_failed", week_start: week, stage: "record_acceptance" }]);
+
+  const retry = { mode: "retry", week_start: week };
+  f.setTime("2026-11-09T14:01:59Z");
+  assert.equal((await (await f.run(retry)).json()).result, "attempt_in_progress");
+  assert.equal(f.requests.length, 1);
+  f.setTime("2026-11-09T14:02:00.001Z");
+  f.failAcceptance(false);
+  assert.equal((await (await f.run(retry)).json()).result, "accepted");
+  assert.deepEqual(f.requests, [f.requests[0], f.requests[0]]);
+  assert.deepEqual([...f.accepted], [[key, f.requests[0].body]]);
+  assert.equal(f.reports(), 1);
+  assert.equal(f.rows.get(week)?.state, "accepted");
+  assert.notEqual(f.rows.get(week)?.attempt_token, frozen.attempt_token);
+  assert.equal(f.rows.get(week)?.payload, null);
+  assert.equal((await (await f.run(retry)).json()).result, "already_accepted");
+  assert.equal(f.requests.length, 2);
 });

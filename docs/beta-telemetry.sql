@@ -1,4 +1,6 @@
 -- Operator-only read queries. telemetry requires the separately approved migration.
+-- The weekly email uses these metric definitions with New York boundaries; see
+-- docs/beta-scorecard.md. These ad hoc queries retain their original UTC grouping.
 -- Business records share a database across environments; those totals are NOT
 -- environment-isolated. Queries other than the cohort report below are not
 -- external-beta-only; apply the same verified cohort when reporting beta totals.

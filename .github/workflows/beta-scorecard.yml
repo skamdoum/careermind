@@ -1,0 +1,39 @@
+name: Weekly beta scorecard
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+      timezone: America/New_York
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Render without sending, or retry a reviewed week
+        type: choice
+        options: [dry_run, retry]
+        default: dry_run
+      week_start:
+        description: New York Monday (YYYY-MM-DD); required for retry
+        type: string
+
+permissions: {}
+jobs:
+  scorecard:
+    if: github.ref == 'refs/heads/main' && vars.BETA_SCORECARD_WORKFLOW_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Request scorecard
+        env:
+          SCORECARD_SECRET: ${{ secrets.BETA_SCORECARD_SECRET }}
+          SCORECARD_MODE: ${{ github.event_name == 'schedule' && 'schedule' || inputs.mode }}
+          SCORECARD_WEEK: ${{ inputs.week_start }}
+        run: |
+          set -euo pipefail
+          test -n "$SCORECARD_SECRET"
+          body=$(python3 -c 'import json,os; mode=os.environ["SCORECARD_MODE"]; week=os.environ["SCORECARD_WEEK"]; print(json.dumps({"mode":mode, **({"week_start":week} if mode!="schedule" and week else {})}))')
+          status=$(curl --silent --show-error --max-time 55 --output /dev/null \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $SCORECARD_SECRET" \
+            --header 'Content-Type: application/json' --data "$body" \
+            https://careermind-phi.vercel.app/api/internal/beta-scorecard)
+          printf 'Scorecard HTTP %s\n' "$status"
+          test "$status" = 200

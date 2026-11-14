@@ -11,6 +11,7 @@
   "eval:test": "tsx scripts/eval/tests/metrics.test.ts",
   "eval:rescore": "tsx scripts/eval/rescore.ts",
   "test:telemetry": "node --import tsx --test scripts/tests/telemetry.test.ts",
+    "test:scorecard": "node --import tsx --test scripts/tests/beta-scorecard*.test.ts",
   "test:telemetry:db": "node --import tsx --test scripts/tests/telemetry-db.test.ts",
   "test:ai-usage": "node --import tsx --test scripts/tests/ai-usage.test.ts",
   "test:resume-source": "node --import tsx --test scripts/tests/resume-source.test.ts",

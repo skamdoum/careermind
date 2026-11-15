@@ -79,3 +79,55 @@ be concluded. Historical reports remain unchanged.
 A future approved run will preserve interrupted outcomes and raw successful output
 receipts for diagnosis. No production fix or additional live evaluation was made.
 Obtain approval before investigating/fixing the compatibility failure and rerunning.
+
+## Offline failure investigation
+
+**The original root cause cannot be established from the preserved artifacts.**
+Both original report directories still contain only `pilot-control.json`; the
+paid run has no response IDs, raw outputs or interrupted outcome. The preserved
+console log ends with the generic `Pilot agent compatibility/harness error`.
+No API requests of any kind were made during this investigation.
+
+The strongest hypothesis is a second-response interpretation/parsing failure
+inside `runAgentTurnFull`, particularly `JSON.parse(response.output_text)`.
+The production parser uses a TypeScript cast after JSON parsing, not runtime
+output validation. The installed SDK's `responses.create` first assembles
+`output_text` from message output-text content. A completed refusal can therefore
+produce empty output text, and a malformed message envelope can throw in SDK
+assembly. Completed status and valid usage receipts do not establish successful
+JSON parsing or conformity to the agent output contract.
+
+Offline tests use the installed OpenAI SDK with synthetic transport responses,
+the real production parser, real GI-01 scenario driver and real simulated user;
+only upload/database/network boundaries are mocked. Findings:
+
+| Synthetic second response | Observed offline result | Live interpretation |
+| --- | --- | --- |
+| Malformed JSON text | Two completed calls; JSON parse error recorded as harness_error | Matches the observed pattern; not proof of live content |
+| Completed refusal | SDK returns empty output_text; same harness_error pattern | Also plausible, not confirmed |
+| Malformed message content envelope | SDK output-text assembly throws; same harness_error pattern | Also plausible, not confirmed |
+| Valid conclusion | Two completed calls; normal agent_stop, no errors | Control case |
+| Valid JSON with numeric question and complexity dimension | Simulated-user matching throws TypeError outside callAgent | Different fatal path from the recorded generic error |
+
+Normal gate coercion and scenario-cap exits do not set harness_errors. Errors in
+post-call repetition detection, output-field access or simulated-user handling
+ordinarily escape the callAgent catch and surface directly, rather than producing
+the recorded generic pilot stop. These observations favor response parsing/SDK
+interpretation over those paths, without identifying the exact live exception.
+
+**Confirmed defect fixed: diagnostic loss in the evaluation harness.**
+- Retain the original error stack in `invoke-agent.ts`, locating parser versus SDK failures.
+- Include that error in the pilot stop diagnostic instead of replacing it with a generic message.
+- Persist the interrupted outcome before checking an already-tripped guard, while preserving the original transport stop reason. Previously that ordering could discard partial progress.
+- Keep production parsing, prompts, schemas, scoring, gate coercion, simulation and call limits unchanged.
+
+Two diagnostic regression tests failed before the fix and pass afterward. All
+seven offline investigation tests pass, together with 14 pilot-guard tests, 10
+model-configuration tests, 15 metric assertions, TypeScript and targeted ESLint.
+Reproduce offline with `npm run test:eval-agent-failure`.
+
+Remaining limitation: when production JSON parsing fails, the function throws
+before returning that response's usage to the scenario driver. Partial scenario
+usage therefore omits the failed-to-parse turn; the pilot guard's independent
+receipt accounting still includes its tokens/cost. No production parser change
+was made to address an unproven live cause. No paid evaluation was initiated.

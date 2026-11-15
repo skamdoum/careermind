@@ -253,11 +253,7 @@ async function main(): Promise<void> {
         reasoningEffort,
         scenarioHardMax: scenario.expected.hard_max_turns,
       });
-      activePilot?.assertHealthy();
-      if (activePilot && outcome.harness_errors.length) {
-        fs.writeFileSync(path.join(reportDir, "interrupted-outcome.json"), JSON.stringify(outcome, null, 2));
-        activePilot.stop("Pilot agent compatibility/harness error");
-      }
+      activePilot?.checkScenario(outcome);
       const duration_ms = Date.now() - t0;
 
       const det = scoreScenario({

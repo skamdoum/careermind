@@ -205,7 +205,7 @@ export async function runScenarioAgent(args: {
     } catch (err) {
       harness_errors.push(
         `Agent call failed on turn ${trajectory.length}: ${
-          err instanceof Error ? err.message : String(err)
+          err instanceof Error ? err.stack ?? err.toString() : String(err)
         }`
       );
       throw err;

@@ -1,6 +1,7 @@
 // Opt-in, evaluation-only transport guard. Estimates are operational controls,
 // not a provider billing guarantee. No prompts or scoring are changed.
 import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export const PILOT_LIMITS = {
   scenarios: 5, runs: 1, agentTurns: 8, agentCalls: 35, judgeCalls: 200,
@@ -46,6 +47,15 @@ export class PilotGuard {
     if (this.reportPath) writeFileSync(this.reportPath, JSON.stringify({ limits: PILOT_LIMITS, thresholdUsd: this.threshold,
       maximumEstimatedUsd: this.maximumUsd(), reservedUsd: this.reservedUsd, estimatedUsd: this.estimatedUsd,
       agentCalls: this.agentCalls, judgeCalls: this.judgeCalls, uploads: this.uploads, stopped: this.stopped, receipts: this.receipts }, null, 2));
+  }
+  checkScenario(outcome: { harness_errors: string[] }) {
+    // Save partial progress even when a transport failure has already tripped
+    // the guard. Preserve that original stop reason instead of replacing it.
+    if (this.stopped || outcome.harness_errors.length) {
+      if (this.reportPath) writeFileSync(join(dirname(this.reportPath), "interrupted-outcome.json"), JSON.stringify(outcome, null, 2));
+      this.assertHealthy();
+      this.stop(`Pilot agent compatibility/harness error: ${outcome.harness_errors.join("\n")}`);
+    }
   }
   wrap(fetcher: typeof fetch): typeof fetch {
     const guarded: typeof fetch = async (url, init) => {

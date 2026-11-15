@@ -163,7 +163,7 @@ for (const count of [1, 2, 3]) test(`authorized ${count}-job comparison preserve
   assert.deepEqual(downloads, [`${USER}/historical.pdf`]); assert.equal(uploads.length, 1); assert.equal(generations.length, count);
   assert.equal(uploads[0].name, "Original.pdf"); assert.equal(uploads[0].type, "application/pdf"); assert.equal(await uploads[0].text(), "persisted resume bytes");
   for (let i = 0; i < count; i++) {
-    assert.equal(generations[i].model, "gpt-4.1"); assert.deepEqual(generations[i].input[1].content, [{ type: "input_file", file_id: "file-owned" }, { type: "input_text", text: `JOB DESCRIPTION:\nJob ${i + 1}` }]);
+    assert.equal(generations[i].model, "gpt-6-luna"); assert.deepEqual(generations[i].reasoning, { effort: "none" }); assert.deepEqual(generations[i].input[1].content, [{ type: "input_file", file_id: "file-owned" }, { type: "input_text", text: `JOB DESCRIPTION:\nJob ${i + 1}` }]);
   }
   assert.equal(JSON.stringify(db), before);
 });

@@ -1,7 +1,24 @@
 {
-  "_note": "USD per 1M tokens. GPT-4.1 and GPT-4.1-mini values match OpenAI's published rates (verified 2026-10-06). o4-mini rates are approximate — verify at openai.com/pricing before trusting cost figures. Reasoning tokens are billed at output rates and are included in the `output_tokens` field in the Responses API.",
-  "_verified_at": "2026-10-06",
-  "gpt-4.1": { "input_per_1m_usd": 2.0, "output_per_1m_usd": 8.0 },
-  "gpt-4.1-mini": { "input_per_1m_usd": 0.4, "output_per_1m_usd": 1.6 },
-  "o4-mini": { "input_per_1m_usd": 1.1, "output_per_1m_usd": 4.4 }
+  "_note": "USD per 1M tokens, Standard short-context input/output estimates (not invoices). GPT-6 Luna/Sol verified 2026-11-15 against https://developers.openai.com/api/docs/models/gpt-6-luna and https://developers.openai.com/api/docs/models/gpt-6-sol. Estimates exclude cache discounts/write fees, long-context and regional premiums. Historical GPT-4.1/mini rates retained from 2026-10-06; o4-mini remains approximate. Reasoning tokens are included in output_tokens and billed as output.",
+  "_verified_at": "2026-11-15",
+  "gpt-4.1": {
+    "input_per_1m_usd": 2.0,
+    "output_per_1m_usd": 8.0
+  },
+  "gpt-4.1-mini": {
+    "input_per_1m_usd": 0.4,
+    "output_per_1m_usd": 1.6
+  },
+  "o4-mini": {
+    "input_per_1m_usd": 1.1,
+    "output_per_1m_usd": 4.4
+  },
+  "gpt-6-luna": {
+    "input_per_1m_usd": 0.1,
+    "output_per_1m_usd": 0.5
+  },
+  "gpt-6-sol": {
+    "input_per_1m_usd": 2.0,
+    "output_per_1m_usd": 10.0
+  }
 }

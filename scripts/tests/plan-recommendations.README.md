@@ -21,7 +21,7 @@ Incomplete requirements, target context or grounding produce explicit errors.
 Confirmation is the application's user-validation contract, not independent proof
 that a candidate's claims are factually true.
 
-The bounded Responses API call uses gpt-4.1, temperature 0, a 60-second timeout,
+The bounded Responses API call defaults to GPT-6 Luna, reasoning effort none, a 60-second timeout,
 no automatic SDK retries and a 2,400 output-token cap. Input over 60,000 characters
 is rejected rather than truncated. Existing task statuses are withheld from the
 model: a done task cannot act as evidence that a career gap is resolved. Actual

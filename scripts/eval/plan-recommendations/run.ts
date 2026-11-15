@@ -45,8 +45,10 @@ async function main() {
     semantic_grounding_and_duplicate_audit: "Requires manual review of successful results; schema/reference validation is not semantic proof.",
     rows,
   };
-  mkdirSync("scripts/eval/reports", { recursive: true });
-  writeFileSync("scripts/eval/reports/plan-recommendations.json", JSON.stringify(report, null, 2));
+  const reportDir = `scripts/eval/reports/${new Date().toISOString().replace(/[:.]/g, "-")}-${RECOMMENDATION_MODEL}-plan-recommendations`;
+  mkdirSync(reportDir, { recursive: true });
+  writeFileSync(`${reportDir}/raw.json`, JSON.stringify(report, null, 2));
+  console.log(`Report: ${reportDir}/raw.json`);
   console.log(JSON.stringify({ status: report.status, pipeline_correct: pipelineCorrect, total: goldenCases.length, model_classification_accuracy: report.model_classification_accuracy }));
   if (providerBlocked || pipelineCorrect !== goldenCases.length) process.exitCode = 1;
 }

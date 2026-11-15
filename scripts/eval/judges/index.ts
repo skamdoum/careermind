@@ -1,3 +1,4 @@
+import { activePilot } from "../pilot-guard";
 // Qualitative LLM judges. Narrow scopes, structured output, called
 // once per metric per scenario trajectory (except per-turn judges and
 // per-claim grounding). Each judge is small; the file keeps them
@@ -99,6 +100,8 @@ export async function runAllJudges(args: {
       metrics.question_relevance_scores.push(clampScore(response.score));
       usage = sumUsage(usage, u);
     } catch (err) {
+      activePilot?.assertHealthy();
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `question_relevance judge failed on turn ${t.index}: ${
           err instanceof Error ? err.message : String(err)
@@ -123,6 +126,8 @@ export async function runAllJudges(args: {
         metrics.unnecessary_question_count += 1;
       }
     } catch (err) {
+      activePilot?.assertHealthy();
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `unnecessary_question judge failed on turn ${t.index}: ${
           err instanceof Error ? err.message : String(err)
@@ -149,6 +154,8 @@ export async function runAllJudges(args: {
       metrics.residual_gap_quality = clampScore(response.score);
       usage = sumUsage(usage, u);
     } catch (err) {
+      activePilot?.assertHealthy();
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `residual_gap_quality judge failed: ${
           err instanceof Error ? err.message : String(err)
@@ -163,6 +170,8 @@ export async function runAllJudges(args: {
       metrics.summary_quality = clampScore(response.score);
       usage = sumUsage(usage, u);
     } catch (err) {
+      activePilot?.assertHealthy();
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `summary_quality judge failed: ${
           err instanceof Error ? err.message : String(err)
@@ -206,6 +215,8 @@ export async function runAllJudges(args: {
           });
         }
       } catch (err) {
+        activePilot?.assertHealthy();
+        if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
         errors.push(
           `grounding judge failed on turn ${t.index}: ${
             err instanceof Error ? err.message : String(err)

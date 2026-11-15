@@ -1,3 +1,4 @@
+import { activePilot } from "./pilot-guard";
 // Pre-upload resume fixtures to OpenAI once; cache file_ids keyed by
 // SHA-256 of the file content so re-authoring a resume changes the key
 // and triggers a fresh upload. The cache file lives next to the eval
@@ -6,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { uploadResumeFileForInvestigation } from "@/lib/gap-investigation/agent";
+import OpenAI from "openai";
 
 const CACHE_FILE = path.join(
   path.dirname(new URL(import.meta.url).pathname),
@@ -42,15 +43,15 @@ export async function uploadOrReuseResume(args: {
   const hash = sha256(content);
 
   const cache = readCache();
-  if (cache[hash]) {
+  if (cache[hash] && !activePilot) {
     return { file_id: cache[hash].file_id, sha256: hash, cached: true };
   }
 
   const blob = new Blob([new Uint8Array(content)], { type: args.mimeType });
-  const file_id = await uploadResumeFileForInvestigation({
-    blob,
-    fileName: path.basename(absPath),
-    mimeType: args.mimeType,
+  // Evaluation uploads bypass application accounting without touching production.
+  const openai = new OpenAI({ maxRetries: 0, timeout: 60000 });
+  const { id: file_id } = await openai.files.create({
+    file: new File([blob], path.basename(absPath), { type: args.mimeType }), purpose: "user_data",
   });
 
   cache[hash] = {
@@ -58,7 +59,7 @@ export async function uploadOrReuseResume(args: {
     uploaded_at: new Date().toISOString(),
     source_path: absPath,
   };
-  writeCache(cache);
+  if (!activePilot) writeCache(cache);
 
   return { file_id, sha256: hash, cached: false };
 }

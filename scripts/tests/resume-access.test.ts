@@ -54,7 +54,7 @@ const load = (Module as any)._load;
   } };
   if (name === "openai") return class {
     files = { create: async ({ file }: any) => { uploads.push(await file.text()); return { id: "file-test" }; } };
-    responses = { create: async (input: any) => { generations.push(input); return { output_text: JSON.stringify(parsed) }; } };
+    responses = { create: async (input: any) => { generations.push(input); return { model: "fixture-provider-model", output_text: JSON.stringify(parsed) }; } };
   };
   if (/gap-investigation\/agent(?:\.ts)?$/.test(name)) return {
     assertAgentInputSize:()=>{},
@@ -124,6 +124,9 @@ test("pasted analysis persists private exact source and preserves public result"
   const r=await analyze(request({resumeText:text,jobDescription:"Job",[RESUME_SOURCE_KEY]:{kind:"stored",resume_id:B}}));
   const body=await r.json(); assert.equal(r.status,200); assert.deepEqual(body.data.result,parsed);
   const saved=db.analyses.at(-1)!; assert.deepEqual(saved.raw_json[RESUME_SOURCE_KEY],textSource(text));
+  assert.equal(saved.model_name, "fixture-provider-model");
+  assert.equal(generations[0].model, "gpt-6-luna");
+  assert.deepEqual(generations[0].reasoning, { effort: "none" });
   assert.equal(JSON.stringify(body).includes(text),false); assert.deepEqual(downloads,[]);
 });
 test("pasted investigation ignores other stored resumes and freezes original text", async () => {

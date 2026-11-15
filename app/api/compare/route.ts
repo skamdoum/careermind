@@ -1,3 +1,4 @@
+import { responseModelSettings } from "@/lib/openai/models";
 import { withAIUsage, aiResponse, aiFile, usageErrorResponse } from "@/lib/ai-usage/guard";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
 
     for (const jd of jobDescriptions) {
       const response = await aiResponse(openai,{
-        model: "gpt-4.1",
+        ...responseModelSettings(),
         input: [
           {
             role: "system",

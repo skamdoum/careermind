@@ -1,3 +1,4 @@
+import { PilotGuard, installPilot, activePilot, validatePilotSelection, diagnosticJSON } from "./pilot-guard";
 // Stage-1 eval CLI.
 //
 // Usage:
@@ -28,13 +29,13 @@ const PRICING_FILE = path.join(__dirname, "pricing.json");
 function parseArgs(argv: string[]): {
   scenarioFilter: string | null;
   modelOverride: string | undefined;
-  reasoningEffort: "low" | "medium" | "high" | undefined;
+  reasoningEffort: "none" | "low" | "medium" | "high" | undefined;
   skipJudges: boolean;
   runs: number;
 } {
   let scenarioFilter: string | null = null;
   let modelOverride: string | undefined = undefined;
-  let reasoningEffort: "low" | "medium" | "high" | undefined = undefined;
+  let reasoningEffort: "none" | "low" | "medium" | "high" | undefined = undefined;
   let skipJudges = false;
   let runs = 1;
   for (let i = 2; i < argv.length; i++) {
@@ -43,7 +44,8 @@ function parseArgs(argv: string[]): {
     else if (a === "--model" && argv[i + 1]) modelOverride = argv[++i];
     else if (a === "--reasoning-effort" && argv[i + 1]) {
       const v = argv[++i];
-      if (v === "low" || v === "medium" || v === "high") reasoningEffort = v;
+      if (v === "none" || v === "low" || v === "medium" || v === "high") reasoningEffort = v;
+      else throw new Error("--reasoning-effort must be none, low, medium, or high");
     } else if (a === "--skip-judges") skipJudges = true;
     else if (a === "--runs" && argv[i + 1]) {
       const n = parseInt(argv[++i], 10);
@@ -170,6 +172,16 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const scenarios = loadScenarios(scenarioFilter);
+  const diagnostic = process.argv.includes("--gi01-diagnostic");
+  const boundedPilot = process.argv.includes("--bounded-pilot") || diagnostic;
+  if (boundedPilot) {
+    validatePilotSelection({ ids: scenarios.map(sc => sc.id), runs, candidate: modelOverride, judge: process.env.OPENAI_JUDGE_MODEL, effort: reasoningEffort, skipJudges, diagnostic });
+    const resumeBytes = Math.max(...scenarios.map(sc => fs.statSync(path.join(__dirname, "resumes", sc.resume.file)).size));
+    installPilot(new PilotGuard(resumeBytes, Number(process.env.EVAL_SPEND_LIMIT_USD ?? (diagnostic ? 1 : 5)), diagnostic));
+    console.log(`[pilot] conservative maximum $${activePilot!.maximumUsd().toFixed(4)}; threshold $${activePilot!.threshold}`);
+  }
+
   // Dynamic imports — these pull in @/lib/supabase/admin which
   // instantiates a Supabase client at import time and needs
   // NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY present.
@@ -195,7 +207,6 @@ async function main(): Promise<void> {
     writeTrajectoryMarkdown,
   } = await import("./report");
 
-  const scenarios = loadScenarios(scenarioFilter);
   if (scenarios.length === 0) {
     console.error("No scenarios matched the filter.");
     process.exit(1);
@@ -206,17 +217,29 @@ async function main(): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const reportDir = makeReportDir(timestamp, effectiveModel);
 
+  if (activePilot) {
+    activePilot.reportPath = path.join(reportDir, "pilot-control.json");
+    activePilot.save();
+    const { default: OpenAI } = await import("openai");
+    const access = new OpenAI({ maxRetries: 0, timeout: 30000 });
+    for (const model of ["gpt-6-luna", "gpt-4.1-mini"]) {
+      await access.models.retrieve(model);
+      console.log(`[pilot] model access verified: ${model}`);
+    }
+  }
+
   console.log(
     `[eval] running ${scenarios.length} scenario(s) × ${runs} run(s) against ${effectiveModel}${
       reasoningEffort ? ` (reasoning_effort=${reasoningEffort})` : ""
     }`
   );
-  console.log(`[eval] report dir: ${reportDir}`);
+  console.log(`[eval] report dir: ${activePilot ? path.relative(process.cwd(), reportDir) : reportDir}`);
 
   const allResults: ScenarioResult[] = [];
   const aggregates: Awaited<ReturnType<typeof aggregateScenarioRuns>>[] = [];
 
   for (const scenario of scenarios) {
+    activePilot?.beginScenario(scenario.id);
     const perRunResults: ScenarioResult[] = [];
     for (let runIdx = 0; runIdx < runs; runIdx++) {
       const started_at = new Date().toISOString();
@@ -230,7 +253,9 @@ async function main(): Promise<void> {
         modelOverride,
         reasoningEffort,
         scenarioHardMax: scenario.expected.hard_max_turns,
+        onProgress: activePilot ? outcome => fs.writeFileSync(path.join(reportDir, "partial-trajectory.json"), diagnosticJSON(outcome)) : undefined,
       });
+      activePilot?.checkScenario(outcome);
       const duration_ms = Date.now() - t0;
 
       const det = scoreScenario({
@@ -266,6 +291,8 @@ async function main(): Promise<void> {
         }
       }
 
+      activePilot?.assertHealthy();
+      if (activePilot && harnessErrors.length) activePilot.stop("Pilot judge compatibility/harness error");
       const est_cost_usd = estimateCost({
         model: outcome.model,
         judgeModel: JUDGE_MODEL,
@@ -360,12 +387,13 @@ async function main(): Promise<void> {
           results: allResults,
         });
 
-  console.log(`\n[eval] report written to: ${reportDir}`);
+  console.log(`\n[eval] report written to: ${activePilot ? path.relative(process.cwd(), reportDir) : reportDir}`);
   console.log(`\n----- summary.md -----\n`);
   console.log(summary);
 }
 
 main().catch((err) => {
-  console.error("[eval] fatal:", err);
+  activePilot?.recordFailure(err);
+  console.error("[eval] fatal:", activePilot ? diagnosticJSON(err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err) : err);
   process.exit(1);
 });

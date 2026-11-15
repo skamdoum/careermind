@@ -118,3 +118,57 @@ test("unexpected receipt usage retains reservation and stops", async () => {
   const g = setup(); await assert.rejects(g.wrap(async () => receipt(1e6, 100))(endpoint, params()), /reservation/);
   assert.ok(g.stopped); assert.ok(g.reservedUsd > 0);
 });
+
+test("GI-01 mode bounds the entire diagnostic below $1 and rejects repeats/other scenarios", async () => {
+  const { validatePilotSelection } = await import("../eval/pilot-guard");
+  const selection = { ids: ["GI-01-strong-hidden-evidence"], runs: 1, candidate: "gpt-6-luna", judge: "gpt-4.1-mini", effort: "none", skipJudges: false, diagnostic: true };
+  validatePilotSelection(selection);
+  for (const invalid of [{ ...selection, ids: ["GI-02-genuine-capability-gap"] }, { ...selection, runs: 2 }, { ...selection, candidate: "gpt-6-sol" }, { ...selection, skipJudges: true }]) assert.throws(() => validatePilotSelection(invalid));
+  const g = new PilotGuard(1049, 1, true);
+  assert.ok(g.maximumUsd() < 0.75); assert.equal(g.limits.agentCalls, 7); assert.equal(g.limits.judgeCalls, 40);
+  assert.throws(() => new PilotGuard(1049, 1.1, true), /threshold/);
+  assert.throws(() => g.beginScenario("GI-02"), /GI-01 only/);
+  const h = new PilotGuard(1049, 1, true); h.beginScenario(selection.ids[0]);
+  assert.throws(() => h.beginScenario(selection.ids[0]), /scenario\/run limit/);
+});
+
+test("GI-01-specific call caps block dispatch", async () => {
+  for (const agent of [true, false]) {
+    const g = new PilotGuard(1049, 1, true); g.beginScenario("GI-01-strong-hidden-evidence");
+    if (agent) g.agentCalls = 7; else g.judgeCalls = 40;
+    let calls = 0;
+    await assert.rejects(g.wrap(async () => { calls++; return receipt(); })(endpoint, params(agent ? "gpt-6-luna" : "gpt-4.1-mini")), /limit/);
+    assert.equal(calls, 0);
+  }
+});
+
+test("structured output diagnostics distinguish parsing, refusal and SDK-envelope failures", async () => {
+  const { inspectOutput } = await import("../eval/pilot-guard");
+  assert.equal(inspectOutput([{ type: "message", content: [{ type: "output_text", text: "{bad" }] }]).stage, "json_parsing");
+  assert.equal(inspectOutput([{ type: "message", content: [{ type: "refusal", refusal: "Synthetic" }] }]).refusal, true);
+  assert.equal(inspectOutput([{ type: "message", content: null }]).stage, "sdk_interpretation");
+  assert.equal(inspectOutput([{ type: "message", content: [{ type: "output_text", text: '{"action":"ask_question"}' }] }]).stage, "json_parsed");
+});
+
+test("diagnostic serialization redacts credentials and local identity while retaining frames", async () => {
+  const { diagnosticJSON } = await import("../eval/pilot-guard");
+  const original = process.env.OPENAI_API_KEY;
+  try {
+    process.env.OPENAI_API_KEY = "synthetic-secret-key";
+    const saved = diagnosticJSON({ stack: `SyntaxError at ${process.cwd()}/agent.ts:1:2`, detail: "synthetic-secret-key Bearer private-token" });
+    assert.ok(!saved.includes(process.cwd())); assert.ok(!saved.includes("synthetic-secret-key")); assert.ok(!saved.includes("private-token"));
+    assert.match(saved, /SyntaxError/); assert.match(saved, /agent.ts:1:2/);
+  } finally { if (original === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = original; }
+});
+
+test("incomplete responses retain known billable usage, output diagnostics and latency before stopping", async () => {
+  const g = new PilotGuard(1049, 1, true); g.beginScenario("GI-01-strong-hidden-evidence");
+  await assert.rejects(g.wrap(async () => Response.json({ id: "synthetic-incomplete", model: "gpt-6-luna", status: "incomplete",
+    incomplete_details: { reason: "max_output_tokens" }, usage: { input_tokens: 100, output_tokens: 4096 },
+    output: [{ type: "message", content: [{ type: "output_text", text: '{} trailing {}' }] }],
+  }))(endpoint, params()), /Incomplete/);
+  assert.equal(g.estimatedUsd, (100 * 0.1 + 4096 * 0.5) / 1e6);
+  assert.equal(g.receipts.length, 1); assert.equal(g.receipts[0].providerStatus, "incomplete");
+  assert.deepEqual(g.receipts[0].incompleteDetails, { reason: "max_output_tokens" });
+  assert.ok(g.receipts[0].latencyMs >= 0); assert.ok(g.reservedUsd > 0);
+});

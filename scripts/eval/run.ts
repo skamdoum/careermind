@@ -1,4 +1,4 @@
-import { PilotGuard, installPilot, activePilot } from "./pilot-guard";
+import { PilotGuard, installPilot, activePilot, validatePilotSelection, diagnosticJSON } from "./pilot-guard";
 // Stage-1 eval CLI.
 //
 // Usage:
@@ -173,11 +173,12 @@ async function main(): Promise<void> {
   }
 
   const scenarios = loadScenarios(scenarioFilter);
-  const boundedPilot = process.argv.includes("--bounded-pilot");
+  const diagnostic = process.argv.includes("--gi01-diagnostic");
+  const boundedPilot = process.argv.includes("--bounded-pilot") || diagnostic;
   if (boundedPilot) {
-    if (runs !== 1 || scenarios.length !== 5 || modelOverride !== "gpt-6-luna" || reasoningEffort !== "none" || process.env.OPENAI_JUDGE_MODEL !== "gpt-4.1-mini" || skipJudges) throw Error("Pilot configuration must be five scenarios, one run, Luna/none and GPT-4.1 mini judges");
+    validatePilotSelection({ ids: scenarios.map(sc => sc.id), runs, candidate: modelOverride, judge: process.env.OPENAI_JUDGE_MODEL, effort: reasoningEffort, skipJudges, diagnostic });
     const resumeBytes = Math.max(...scenarios.map(sc => fs.statSync(path.join(__dirname, "resumes", sc.resume.file)).size));
-    installPilot(new PilotGuard(resumeBytes, Number(process.env.EVAL_SPEND_LIMIT_USD ?? 5)));
+    installPilot(new PilotGuard(resumeBytes, Number(process.env.EVAL_SPEND_LIMIT_USD ?? (diagnostic ? 1 : 5)), diagnostic));
     console.log(`[pilot] conservative maximum $${activePilot!.maximumUsd().toFixed(4)}; threshold $${activePilot!.threshold}`);
   }
 
@@ -232,7 +233,7 @@ async function main(): Promise<void> {
       reasoningEffort ? ` (reasoning_effort=${reasoningEffort})` : ""
     }`
   );
-  console.log(`[eval] report dir: ${reportDir}`);
+  console.log(`[eval] report dir: ${activePilot ? path.relative(process.cwd(), reportDir) : reportDir}`);
 
   const allResults: ScenarioResult[] = [];
   const aggregates: Awaited<ReturnType<typeof aggregateScenarioRuns>>[] = [];
@@ -252,6 +253,7 @@ async function main(): Promise<void> {
         modelOverride,
         reasoningEffort,
         scenarioHardMax: scenario.expected.hard_max_turns,
+        onProgress: activePilot ? outcome => fs.writeFileSync(path.join(reportDir, "partial-trajectory.json"), diagnosticJSON(outcome)) : undefined,
       });
       activePilot?.checkScenario(outcome);
       const duration_ms = Date.now() - t0;
@@ -385,12 +387,13 @@ async function main(): Promise<void> {
           results: allResults,
         });
 
-  console.log(`\n[eval] report written to: ${reportDir}`);
+  console.log(`\n[eval] report written to: ${activePilot ? path.relative(process.cwd(), reportDir) : reportDir}`);
   console.log(`\n----- summary.md -----\n`);
   console.log(summary);
 }
 
 main().catch((err) => {
-  console.error("[eval] fatal:", err);
+  activePilot?.recordFailure(err);
+  console.error("[eval] fatal:", activePilot ? diagnosticJSON(err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err) : err);
   process.exit(1);
 });

@@ -168,6 +168,7 @@ export async function runScenarioAgent(args: {
   modelOverride?: string;
   reasoningEffort?: "none" | "low" | "medium" | "high";
   scenarioHardMax: number;
+  onProgress?: (outcome: AgentRunOutcome) => void;
 }): Promise<AgentRunOutcome> {
   const { scenario, modelOverride, reasoningEffort, scenarioHardMax } = args;
 
@@ -197,6 +198,9 @@ export async function runScenarioAgent(args: {
   let modelUsed = modelOverride || AGENT_MODEL_NAME;
   let stop_reason: StopReason = "harness_error";
 
+  const checkpoint = () => args.onProgress?.({ trajectory, stop_reason, turn_count: trajectory.filter(t => t.role === "user").length,
+    usage_totals: { input_tokens, output_tokens, total_tokens }, model: modelUsed, gate_coercion_events, repetition_events, harness_errors });
+
   const callAgent = async (
     input: AgentTurnInput
   ): Promise<AgentTurnFullResult> => {
@@ -208,6 +212,7 @@ export async function runScenarioAgent(args: {
           err instanceof Error ? err.stack ?? err.toString() : String(err)
         }`
       );
+      checkpoint();
       throw err;
     }
   };
@@ -264,6 +269,8 @@ export async function runScenarioAgent(args: {
     latency_ms: kickoffLatency,
   });
 
+  checkpoint();
+
   if (kickoffCoerced.out.action === "stop_and_conclude") {
     stop_reason = kickoffCoerced.coerced ? "gate_coerced" : "agent_stop";
     return {
@@ -309,6 +316,7 @@ export async function runScenarioAgent(args: {
       matched_rule_id,
     });
 
+    checkpoint();
     const transcriptRows = toRowShape(trajectory);
     const priorCoverage = latestDimensionCoverage(
       transcriptRows.slice(0, -1) // exclude the user turn just added
@@ -363,6 +371,7 @@ export async function runScenarioAgent(args: {
       latency_ms: latency,
     });
 
+    checkpoint();
     if (coerced.out.action === "stop_and_conclude") {
       stop_reason = coerced.coerced ? "gate_coerced" : "agent_stop";
       break;

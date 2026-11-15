@@ -101,7 +101,7 @@ export async function runAllJudges(args: {
       usage = sumUsage(usage, u);
     } catch (err) {
       activePilot?.assertHealthy();
-      if (activePilot) activePilot.stop("Pilot judge error; no further requests permitted");
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `question_relevance judge failed on turn ${t.index}: ${
           err instanceof Error ? err.message : String(err)
@@ -127,7 +127,7 @@ export async function runAllJudges(args: {
       }
     } catch (err) {
       activePilot?.assertHealthy();
-      if (activePilot) activePilot.stop("Pilot judge error; no further requests permitted");
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `unnecessary_question judge failed on turn ${t.index}: ${
           err instanceof Error ? err.message : String(err)
@@ -155,7 +155,7 @@ export async function runAllJudges(args: {
       usage = sumUsage(usage, u);
     } catch (err) {
       activePilot?.assertHealthy();
-      if (activePilot) activePilot.stop("Pilot judge error; no further requests permitted");
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `residual_gap_quality judge failed: ${
           err instanceof Error ? err.message : String(err)
@@ -171,7 +171,7 @@ export async function runAllJudges(args: {
       usage = sumUsage(usage, u);
     } catch (err) {
       activePilot?.assertHealthy();
-      if (activePilot) activePilot.stop("Pilot judge error; no further requests permitted");
+      if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
       errors.push(
         `summary_quality judge failed: ${
           err instanceof Error ? err.message : String(err)
@@ -216,7 +216,7 @@ export async function runAllJudges(args: {
         }
       } catch (err) {
         activePilot?.assertHealthy();
-        if (activePilot) activePilot.stop("Pilot judge error; no further requests permitted");
+        if (activePilot) { activePilot.recordFailure(err); activePilot.stop("Pilot judge error; no further requests permitted"); }
         errors.push(
           `grounding judge failed on turn ${t.index}: ${
             err instanceof Error ? err.message : String(err)

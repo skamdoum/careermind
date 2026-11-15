@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import OpenAI from "openai";
-import { PilotGuard } from "../eval/pilot-guard";
+import { PilotGuard, diagnosticJSON } from "../eval/pilot-guard";
 import type { AgentTurnOutput } from "../../lib/gap-investigation/agent";
 
 // No real network, keys, resume upload, model metadata calls, or database access.
@@ -91,7 +91,7 @@ test("parser failures retain their stack and reach the pilot stop diagnostic", a
     const g = new PilotGuard(1232); g.reportPath = join(root, "pilot-control.json");
     assert.throws(() => g.checkScenario(outcome), /SyntaxError/);
     assert.match(outcome.harness_errors.join("\n"), /agent\.ts/);
-    assert.deepEqual(JSON.parse(readFileSync(join(root, "interrupted-outcome.json"), "utf8")), outcome);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, "interrupted-outcome.json"), "utf8")), JSON.parse(diagnosticJSON(outcome)));
     assert.match(JSON.parse(readFileSync(g.reportPath, "utf8")).stopped, /Agent call failed on turn 2/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -104,7 +104,7 @@ test("an already-stopped transport still saves partial outcome before rethrowing
     const outcome = { harness_errors: ["Synthetic SDK error"], trajectory: [{ role: "assistant", content: "Synthetic question" }] };
     assert.throws(() => g.checkScenario(outcome), /HTTP 400/);
     assert.ok(existsSync(join(root, "interrupted-outcome.json")));
-    assert.deepEqual(JSON.parse(readFileSync(join(root, "interrupted-outcome.json"), "utf8")), outcome);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, "interrupted-outcome.json"), "utf8")), JSON.parse(diagnosticJSON(outcome)));
     assert.equal(g.stopped, "Pilot provider HTTP 400");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

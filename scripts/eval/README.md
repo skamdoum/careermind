@@ -143,3 +143,29 @@ remain timestamped; historical reports are never overwritten. Agent scenario
 latency excludes judge time; the control log also records per-request latency.
 
 Offline validation (no paid calls): `npm run test:eval-pilot`.
+
+### Single GI-01 diagnostic
+
+With explicit authorization, run exactly GI-01 once under a $1 operational threshold:
+
+```sh
+OPENAI_GENERATION_MODEL=gpt-6-luna OPENAI_JUDGE_MODEL=gpt-4.1-mini EVAL_SPEND_LIMIT_USD=1 node --import tsx scripts/eval/run.ts --gi01-diagnostic --scenario GI-01 --model gpt-6-luna --reasoning-effort none --runs 1
+```
+
+This flag activates the guard itself; other scenarios, repeat runs, other models,
+non-none reasoning, and skipped judges are rejected before dispatch. The profile
+permits seven agent calls including kickoff, 40 judge calls and one fresh synthetic
+text upload. Existing token/input caps, zero retries and immediate error stops
+remain unchanged. Worst-case estimate for the 1049-byte GI-01 resume is
+$0.72071905 with the existing 50% margin and upload allowance, below $1.
+
+The control report retains response IDs/status/model, request IDs, raw outputs,
+JSON/SDK-envelope inspection and per-request tokens, cost estimates and latency.
+These inspections observe the response without changing production parsing or
+schemas. `partial-trajectory.json` is checkpointed before later harness operations,
+and `interrupted-outcome.json` plus the original exception stack are saved on a
+caught failure. The fatal runner error is also retained in the control report.
+Artifacts exclude request credentials and real user inputs; known secrets and
+local identity paths are redacted while stack frames/line numbers remain useful.
+Only synthetic GI-01 fixture data is sent. Do not automatically repeat a failed
+diagnostic or interpret its operational threshold as a provider billing guarantee.

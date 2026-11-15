@@ -1,3 +1,4 @@
+import { PilotGuard, installPilot, activePilot } from "./pilot-guard";
 // Stage-1 eval CLI.
 //
 // Usage:
@@ -171,6 +172,15 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const scenarios = loadScenarios(scenarioFilter);
+  const boundedPilot = process.argv.includes("--bounded-pilot");
+  if (boundedPilot) {
+    if (runs !== 1 || scenarios.length !== 5 || modelOverride !== "gpt-6-luna" || reasoningEffort !== "none" || process.env.OPENAI_JUDGE_MODEL !== "gpt-4.1-mini" || skipJudges) throw Error("Pilot configuration must be five scenarios, one run, Luna/none and GPT-4.1 mini judges");
+    const resumeBytes = Math.max(...scenarios.map(sc => fs.statSync(path.join(__dirname, "resumes", sc.resume.file)).size));
+    installPilot(new PilotGuard(resumeBytes, Number(process.env.EVAL_SPEND_LIMIT_USD ?? 5)));
+    console.log(`[pilot] conservative maximum $${activePilot!.maximumUsd().toFixed(4)}; threshold $${activePilot!.threshold}`);
+  }
+
   // Dynamic imports — these pull in @/lib/supabase/admin which
   // instantiates a Supabase client at import time and needs
   // NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY present.
@@ -196,7 +206,6 @@ async function main(): Promise<void> {
     writeTrajectoryMarkdown,
   } = await import("./report");
 
-  const scenarios = loadScenarios(scenarioFilter);
   if (scenarios.length === 0) {
     console.error("No scenarios matched the filter.");
     process.exit(1);
@@ -206,6 +215,17 @@ async function main(): Promise<void> {
   const pricing = loadPricing();
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const reportDir = makeReportDir(timestamp, effectiveModel);
+
+  if (activePilot) {
+    activePilot.reportPath = path.join(reportDir, "pilot-control.json");
+    activePilot.save();
+    const { default: OpenAI } = await import("openai");
+    const access = new OpenAI({ maxRetries: 0, timeout: 30000 });
+    for (const model of ["gpt-6-luna", "gpt-4.1-mini"]) {
+      await access.models.retrieve(model);
+      console.log(`[pilot] model access verified: ${model}`);
+    }
+  }
 
   console.log(
     `[eval] running ${scenarios.length} scenario(s) × ${runs} run(s) against ${effectiveModel}${
@@ -218,6 +238,7 @@ async function main(): Promise<void> {
   const aggregates: Awaited<ReturnType<typeof aggregateScenarioRuns>>[] = [];
 
   for (const scenario of scenarios) {
+    activePilot?.beginScenario(scenario.id);
     const perRunResults: ScenarioResult[] = [];
     for (let runIdx = 0; runIdx < runs; runIdx++) {
       const started_at = new Date().toISOString();
@@ -232,6 +253,11 @@ async function main(): Promise<void> {
         reasoningEffort,
         scenarioHardMax: scenario.expected.hard_max_turns,
       });
+      activePilot?.assertHealthy();
+      if (activePilot && outcome.harness_errors.length) {
+        fs.writeFileSync(path.join(reportDir, "interrupted-outcome.json"), JSON.stringify(outcome, null, 2));
+        activePilot.stop("Pilot agent compatibility/harness error");
+      }
       const duration_ms = Date.now() - t0;
 
       const det = scoreScenario({
@@ -267,6 +293,8 @@ async function main(): Promise<void> {
         }
       }
 
+      activePilot?.assertHealthy();
+      if (activePilot && harnessErrors.length) activePilot.stop("Pilot judge compatibility/harness error");
       const est_cost_usd = estimateCost({
         model: outcome.model,
         judgeModel: JUDGE_MODEL,

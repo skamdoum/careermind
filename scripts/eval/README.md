@@ -99,3 +99,47 @@ expensive Sol call; Sol is an evaluation challenger, not the beta default.
 Rollback can use the environment overrides without removing receipt support.
 No hosted migration, activation, merge, deployment or paid benchmark was performed
 as part of Phase 1 implementation.
+
+## Bounded Luna pilot
+
+Opt-in safeguards apply only to this evaluation command:
+
+```sh
+OPENAI_GENERATION_MODEL=gpt-6-luna OPENAI_JUDGE_MODEL=gpt-4.1-mini EVAL_SPEND_LIMIT_USD=5 node --import tsx scripts/eval/run.ts --bounded-pilot --model gpt-6-luna --reasoning-effort none --runs 1
+```
+
+This makes paid calls. Run only with explicit authorization. It requires all five
+synthetic scenarios, one run each, Luna/none, and historical mini judges. Limits:
+35 agent calls total (at most eight per scenario including kickoff), 200 judge
+calls, five fresh text-fixture uploads no larger than 2 KiB each, 64 KiB serialized
+agent inputs, 16 KiB judge inputs, 4096 agent output tokens and 1024 judge output
+tokens. Existing scenario-specific turn caps remain authoritative. The simulated
+user makes no model calls. All model/upload clients use zero automatic retries.
+
+The transport is installed before SDK clients are created. It blocks other hosts,
+API endpoints, retries, tools, streaming, background jobs and nonstandard tiers.
+Both model IDs are checked via metadata GET before generation. File uploads are
+fresh known-size text fixtures; the pilot preserves the historical upload cache.
+SDK multipart support is declared with the native Response constructor to avoid
+its local data-URL probe. No production network access or database writes are
+allowed by the pilot transport.
+
+Before dispatch, reserve the full per-request byte/token upper estimate, never
+refunding reservations (including errors). Text tokens are bounded by serialized
+UTF-8 bytes plus maximum fixture bytes and 4096 framing/schema tokens. A 50% cost
+margin covers cache-write and estimation overhead. Each upload receives a further
+$0.01 allowance even though plain user-data uploads have no generation fee. At
+the current maximum fixture size of 1232 bytes, the maximum is $3.626516 versus
+the $5 default operational threshold. Set a lower EVAL_SPEND_LIMIT_USD to refuse
+runs whose complete estimate cannot fit; values above $5 are rejected. Estimates
+use the official Standard input/output rates verified above, without cache-read
+discounts. This is not a guaranteed provider billing cap or an account-wide limit.
+
+Any HTTP/network error, incomplete/invalid receipt, input/call/budget limit or
+harness incompatibility stops the pilot and blocks subsequent API requests.
+`pilot-control.json` records limits, maximum estimate, retained reservations,
+receipt-based token/cost/latency measurements and stop reason. Summary/raw reports
+remain timestamped; historical reports are never overwritten. Agent scenario
+latency excludes judge time; the control log also records per-request latency.
+
+Offline validation (no paid calls): `npm run test:eval-pilot`.

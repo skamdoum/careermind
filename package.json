@@ -13,6 +13,7 @@
   "test:telemetry": "node --import tsx --test scripts/tests/telemetry.test.ts",
     "test:scorecard": "node --import tsx --test scripts/tests/beta-scorecard*.test.ts",
   "test:telemetry:db": "node --import tsx --test scripts/tests/telemetry-db.test.ts",
+  "test:eval-pilot": "node --import tsx --test scripts/tests/eval-pilot.test.ts",
   "test:openai-models": "node --import tsx --test scripts/tests/openai-models.test.ts",
   "test:ai-usage": "node --import tsx --test scripts/tests/ai-usage.test.ts",
   "test:resume-source": "node --import tsx --test scripts/tests/resume-source.test.ts",

@@ -5,7 +5,7 @@ import { EVALUATION_JUDGE_MODEL, responseModelSettings } from "../../../lib/open
 
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0, timeout: 60000 });
 
 export const JUDGE_MODEL = EVALUATION_JUDGE_MODEL;
 
@@ -45,6 +45,7 @@ export async function askJudge(args: {
 }): Promise<{ response: JudgeResponse; usage: JudgeUsage }> {
   const response = await openai.responses.create({
     ...responseModelSettings(JUDGE_MODEL),
+    max_output_tokens: 1024,
     input: [
       {
         role: "system",

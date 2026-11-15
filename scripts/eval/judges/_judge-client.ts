@@ -1,3 +1,4 @@
+import { EVALUATION_JUDGE_MODEL, responseModelSettings } from "../../../lib/openai/models";
 // Tiny OpenAI client wrapper for narrow qualitative judges. Judges
 // use structured output with a strict JSON schema so the eval harness
 // can read `.score` / `.necessary` directly without re-parsing.
@@ -6,7 +7,7 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export const JUDGE_MODEL = "gpt-4.1-mini";
+export const JUDGE_MODEL = EVALUATION_JUDGE_MODEL;
 
 export type JudgeUsage = {
   input_tokens: number;
@@ -43,7 +44,7 @@ export async function askJudge(args: {
   name: string;
 }): Promise<{ response: JudgeResponse; usage: JudgeUsage }> {
   const response = await openai.responses.create({
-    model: JUDGE_MODEL,
+    ...responseModelSettings(JUDGE_MODEL),
     input: [
       {
         role: "system",

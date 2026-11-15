@@ -185,3 +185,11 @@ for (const [status, outcome] of [[429, "rejected"], [undefined, "unknown"]] as c
     assert.equal(JSON.stringify(row).includes("PRIVATE"), false);
   });
 }
+
+for (const [model, expected] of [["gpt-6-luna", 121400], ["gpt-6-sol", 2428000]] as const) {
+  test(`new model telemetry prices ${model} without changing historical rates`, () => {
+    const event = providerEvent({ ...base, model, usage: { input_tokens: 1000, output_tokens: 50, input_tokens_details: { cached_tokens: 40 } } });
+    assert.equal(event.estimated_cost_nanousd, expected);
+    assert.equal(event.pricing_version, "gpt6-standard-2026-11-15-v1");
+  });
+}

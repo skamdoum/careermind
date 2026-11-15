@@ -1,3 +1,4 @@
+import { responseModelSettings } from "@/lib/openai/models";
 import { withAIUsage, aiResponse, usageErrorResponse, AIUsageError } from "@/lib/ai-usage/guard";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
@@ -163,7 +164,7 @@ export async function GET() {
 
     return await withAIUsage({userId:user.id,route:"strategy",input:{profileId:activeProfile.id,source_hash}},async()=>{
     const response = await aiResponse(openai,{
-      model: "gpt-4.1",
+      ...responseModelSettings(),
       input: [
         {
           role: "system",

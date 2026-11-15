@@ -3,6 +3,14 @@ import type { Route } from "./provider";
 // GPT-4.1 standard text pricing verified 2026-11-08. Nano-USD per token:
 // ordinary input 2,000; cached input 500; output 8,000.
 export const PRICING_VERSION = "gpt41-standard-2026-11-08-v1";
+// Standard short-context nano-USD/token, verified 2026-11-15 against the
+// official Luna/Sol model pages. Cache-write fees are not in these estimates.
+const modelPricing: Record<string, { input: number; cached: number; output: number; version: string }> = {
+  "gpt-4.1": { input: 2000, cached: 500, output: 8000, version: PRICING_VERSION },
+  "gpt-4.1-2025-04-14": { input: 2000, cached: 500, output: 8000, version: PRICING_VERSION },
+  "gpt-6-luna": { input: 100, cached: 10, output: 500, version: "gpt6-standard-2026-11-15-v1" },
+  "gpt-6-sol": { input: 2000, cached: 200, output: 10000, version: "gpt6-standard-2026-11-15-v1" },
+};
 export type TelemetryScope = { analysis_id?: string; investigation_id?: string };
 export type ProviderMeasurement = {
   operationId: string; callIndex: number; userId: string; route: Route;
@@ -24,9 +32,9 @@ export function providerEvent(measurement: ProviderMeasurement, vercelEnv = proc
   const output = tokens(usage?.output_tokens);
   const rawCached = tokens(usage?.input_tokens_details?.cached_tokens);
   const cached = input !== null && rawCached !== null && rawCached <= input ? rawCached : null;
-  const priced = ["gpt-4.1", "gpt-4.1-2025-04-14"].includes(measurement.model);
-  const cost = priced && input !== null && cached !== null && output !== null
-    ? (input - cached) * 2000 + cached * 500 + output * 8000 : null;
+  const price = modelPricing[measurement.model];
+  const cost = price && input !== null && cached !== null && output !== null
+    ? (input - cached) * price.input + cached * price.cached + output * price.output : null;
   return {
     event_key: `ai:${measurement.operationId}:${measurement.callIndex}`,
     event_type: "ai_call" as const,
@@ -40,7 +48,7 @@ export function providerEvent(measurement: ProviderMeasurement, vercelEnv = proc
     model: measurement.model,
     provider_response_id: measurement.responseId ?? null,
     input_tokens: input, cached_input_tokens: cached, output_tokens: output,
-    pricing_version: priced ? PRICING_VERSION : null,
+    pricing_version: price?.version ?? null,
     estimated_cost_nanousd: cost !== null && Number.isSafeInteger(cost) ? cost : null,
     latency_ms: Math.max(0, Math.round(measurement.latencyMs)),
     outcome: measurement.outcome,

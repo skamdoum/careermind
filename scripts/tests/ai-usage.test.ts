@@ -46,6 +46,7 @@ before(() => {
     started = true;
     sql(readFileSync('scripts/tests/ai-usage-fixture.sql', 'utf8'));
     sql(readFileSync('supabase/migrations/20261103000001_ai_usage_guard.sql', 'utf8'));
+    sql(readFileSync('supabase/migrations/20261115000001_openai_model_receipts.sql', 'utf8'));
     console.log(`Disposable database: ${sql('show server_version')}`);
     sql(`insert into auth.users(id)values('${A}'),('${B}');insert into public.profiles(id)values('${A}'),('${B}');insert into public.career_profiles(id,user_id,name) values('${P}','${A}','Synthetic profile');insert into public.resumes(id,user_id,career_profile_id,file_path,file_name)values('${R}','${A}','${P}','${A}/123.txt','Synthetic.txt');`);
 });
@@ -61,6 +62,16 @@ test('migration commits disabled and omission of enabled cannot authorize genera
     assert.equal(sql('select count(*) from public.ai_usage_operations'), '0');
     assert.equal(sql('select count(*) from public.ai_usage_buckets'), '0');
     assert.equal(sql('begin;delete from public.ai_usage_settings;insert into public.ai_usage_settings(id)values(true);select enabled from public.ai_usage_settings;rollback;'), 'f');
+});
+for (const [model, input, output, expected] of [
+    ['gpt-6-luna', 20, 30, 17], ['gpt-6-luna', 1, 1, 1],
+    ['gpt-6-sol', 20, 30, 340], ['gpt-4.1', 20, 30, 280],
+] as const) test(`model receipt settles ${model} ${input}/${output} at ${expected} micro-USD`, () => {
+    // Preserve the first test's assertion of the migration's disabled state.
+    reset(); const o = claim().operation; step(o, 'begin', 'response:0');
+    step(o, 'response', 'response:0', { model, output_text: '{}', usage: { input_tokens: input, output_tokens: output } });
+    assert.equal(Number(sql("select spent from public.ai_usage_buckets where subject='app' and category='budget'")), expected);
+    end(o); assert.equal(sql(`select call_pending from public.ai_usage_operations where id='${o.id}'`), 'f');
 });
 test('hosted fixture enforces enum checks, cross-table references and ownership RLS', () => {
     sql(`insert into public.analyses(user_id,analysis_type,raw_json)values('${A}','invalid','{}')`, false);
@@ -179,7 +190,7 @@ const originalLoad = (Module as any)._load;
                     providerCalls++;
                     if (providerFailure)
                         throw Error('Synthetic provider timeout');
-                    return { id: 'resp-fixture', model: 'gpt-4.1', usage: { input_tokens: 20, output_tokens: 30 }, output_text: JSON.stringify(providerOutput ?? { company_name: 'Synthetic', core_verdict: 'Borderline', reasoning: 'Synthetic', score: 3 }) };
+                    return { id: 'resp-fixture', model: input.model, usage: { input_tokens: 20, output_tokens: 30 }, output_text: JSON.stringify(providerOutput ?? { company_name: 'Synthetic', core_verdict: 'Borderline', reasoning: 'Synthetic', score: 3 }) };
                 } };
         };
     return originalLoad.call(this, name, ...rest);
@@ -235,7 +246,7 @@ for (const jobs of [1, 2, 3])
         assert.equal(providerCalls, jobs);
         assert.equal(downloads, 1);
         assert.equal(Number(sql("select used from public.ai_usage_buckets where category='other'")), jobs);
-        assert.equal(Number(sql("select spent from public.ai_usage_buckets where category='budget'")), jobs * 280);
+        assert.equal(Number(sql("select spent from public.ai_usage_buckets where category='budget'")), jobs * 17);
     });
 test('anonymous Auth behavior preserved: Compare denies, supported routes remain per-user limited', async () => { reset(); resetProvider(); fixtureUser.is_anonymous = true; assert.equal((await compare(compareRequest())).status, 403); assert.equal(providerCalls + downloads, 0); const anonymous = randomUUID(); assert.ok(claim(anonymous, 'analysis').operation); assert.equal(claim(anonymous, 'turn').code, 'AI_IN_PROGRESS'); });
 test('provider timeout is not retried, refunded, or silently regenerated', async () => { reset(); resetProvider(); providerFailure = true; assert.equal((await compare(compareRequest())).status, 500); assert.equal(providerCalls, 1); const retry = await compare(compareRequest()); assert.equal(retry.status, 503); assert.equal((await retry.json()).data.code, 'AI_OUTCOME_UNCERTAIN'); assert.equal(providerCalls, 1); assert.equal(Number(sql("select reserved from public.ai_usage_buckets where category='budget'")), 2110000); });
@@ -540,7 +551,7 @@ for(const checkpoint of ['upload-only','response-saved'])test(`legacy stored Ana
     assert.equal(sql("select steps ? 'resumeSource' from public.ai_usage_operations"),'f');
     assert.equal(sql("select state from public.ai_usage_operations"),'failed');
     assert.equal(sql("select used from public.ai_usage_buckets where category='analysis'"),checkpoint==='upload-only'?'0':'1');
-    assert.equal(sql("select spent from public.ai_usage_buckets where category='budget'"),checkpoint==='upload-only'?'0':'280');
+    assert.equal(sql("select spent from public.ai_usage_buckets where category='budget'"),checkpoint==='upload-only'?'0':'17');
     assert.equal(sql("select reserved from public.ai_usage_buckets where category='budget'"),'0');
 });
 test('unchanged stored Analyze recovery persists the original hash and completed replay ignores later file changes',async()=>{

@@ -28,13 +28,13 @@ const PRICING_FILE = path.join(__dirname, "pricing.json");
 function parseArgs(argv: string[]): {
   scenarioFilter: string | null;
   modelOverride: string | undefined;
-  reasoningEffort: "low" | "medium" | "high" | undefined;
+  reasoningEffort: "none" | "low" | "medium" | "high" | undefined;
   skipJudges: boolean;
   runs: number;
 } {
   let scenarioFilter: string | null = null;
   let modelOverride: string | undefined = undefined;
-  let reasoningEffort: "low" | "medium" | "high" | undefined = undefined;
+  let reasoningEffort: "none" | "low" | "medium" | "high" | undefined = undefined;
   let skipJudges = false;
   let runs = 1;
   for (let i = 2; i < argv.length; i++) {
@@ -43,7 +43,8 @@ function parseArgs(argv: string[]): {
     else if (a === "--model" && argv[i + 1]) modelOverride = argv[++i];
     else if (a === "--reasoning-effort" && argv[i + 1]) {
       const v = argv[++i];
-      if (v === "low" || v === "medium" || v === "high") reasoningEffort = v;
+      if (v === "none" || v === "low" || v === "medium" || v === "high") reasoningEffort = v;
+      else throw new Error("--reasoning-effort must be none, low, medium, or high");
     } else if (a === "--skip-judges") skipJudges = true;
     else if (a === "--runs" && argv[i + 1]) {
       const n = parseInt(argv[++i], 10);

@@ -1,3 +1,4 @@
+import { GENERATION_MODEL, responseModelSettings } from "@/lib/openai/models";
 import { providerContext } from "@/lib/ai-usage/provider";
 import { ResumeSourceError, RESUME_SOURCE_KEY, publicAnalysisJson, storedSource, textSource, verifyStoredSource, sourceError } from "@/lib/resumes/source.server";
 import { withAIUsage, aiResponse, aiFile, persistAIRecords, usageCheckpoint, usageErrorResponse, readAIInput, AIUsageError } from "@/lib/ai-usage/guard";
@@ -306,7 +307,7 @@ export async function POST(req: Request) {
       used_resume_text_fallback: !resolvedResume && !!resumeText,
     });
     const response = await aiResponse(openai, {
-      model: "gpt-4.1",
+      ...responseModelSettings(),
       input: [
         {
           role: "system",
@@ -925,7 +926,7 @@ Return only valid JSON.`,
     // added. Deferred to V2.3 pending V2.2 regression measurement.
 
     const analysisRecord = {
-      analysis_type:"initial_onboarding", model_name:"gpt-4.1", raw_json:{ ...parsed, [RESUME_SOURCE_KEY]: resumeSource },
+      analysis_type:"initial_onboarding", model_name:response.model || GENERATION_MODEL, raw_json:{ ...parsed, [RESUME_SOURCE_KEY]: resumeSource },
       summary:parsed.positioning_summary, status:"completed", career_profile_id:activeProfileId,
       career_goal_id:career_goal_id ?? null, job_description_id:job_description_id ?? null,
       resume_id:resolvedResume?.id ?? null,

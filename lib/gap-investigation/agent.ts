@@ -1,3 +1,4 @@
+import { GENERATION_MODEL, responseModelSettings, type ReasoningEffort } from "../openai/models";
 import { frozenResumeText } from "@/lib/resumes/source";
 import { aiResponse, aiFile, AIUsageError } from "@/lib/ai-usage/provider";
 import OpenAI from "openai";
@@ -20,7 +21,7 @@ import {
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export const AGENT_MODEL_NAME = "gpt-4.1";
+export const AGENT_MODEL_NAME = GENERATION_MODEL;
 
 // The agent's structured output. Every field is always present — strict
 // JSON schema requires it. The server interprets the fields per `action`:
@@ -108,10 +109,9 @@ export type AgentTurnInput = {
   // function benchmarks across models. Production never sets this and
   // continues to use AGENT_MODEL_NAME.
   model_override?: string;
-  // Optional reasoning-effort setting for OpenAI reasoning models
-  // (o-series). Ignored when the model is not a reasoning model.
+  // Luna/Sol default to none; legacy o-series retain their provider default.
   // Production never sets this.
-  reasoning_effort?: "low" | "medium" | "high";
+  reasoning_effort?: ReasoningEffort;
 };
 
 // Token usage + the model actually used. Reported by runAgentTurnFull
@@ -747,19 +747,8 @@ export async function runAgentTurnFull(
 ): Promise<AgentTurnFullResult> {
   const model = input.model_override ?? AGENT_MODEL_NAME;
 
-  // Reasoning models (o-series) accept a `reasoning` parameter.
-  // Non-reasoning models reject it. Heuristic: model id starts with "o"
-  // followed by a digit (o1, o3, o3-mini, o4-mini, …). Production
-  // (gpt-4.1) does not match, so this stays off by default.
-  const isReasoningModel = /^o\d/.test(model);
-  const reasoning =
-    isReasoningModel && input.reasoning_effort
-      ? { effort: input.reasoning_effort }
-      : undefined;
-
   const response = await aiResponse(openai,{
-    model,
-    ...(reasoning ? { reasoning } : {}),
+    ...responseModelSettings(model, input.reasoning_effort),
     input: agentInput(input),
     text: {
       format: {

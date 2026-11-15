@@ -166,7 +166,7 @@ function detectRepetition(
 export async function runScenarioAgent(args: {
   scenario: GoldenScenario;
   modelOverride?: string;
-  reasoningEffort?: "low" | "medium" | "high";
+  reasoningEffort?: "none" | "low" | "medium" | "high";
   scenarioHardMax: number;
 }): Promise<AgentRunOutcome> {
   const { scenario, modelOverride, reasoningEffort, scenarioHardMax } = args;
